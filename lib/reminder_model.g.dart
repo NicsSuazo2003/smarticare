@@ -19,34 +19,43 @@ class ReminderAdapter extends TypeAdapter<Reminder> {
     return Reminder(
       id: fields[0] as String,
       userId: fields[1] as String,
-      title: fields[2] as String,
-      description: fields[3] as String,
-      dateTime: fields[4] as DateTime,
-      completed: fields[5] as bool,
-      needsSync: fields[6] as bool,
-      lastUpdated: fields[7] as DateTime,
+      type: fields[2] as String,
+      title: fields[3] as String,
+      description: fields[4] as String,
+      dateTime: fields[5] as DateTime,
+      completed: fields[6] as bool,
+      repeat: fields[7] as String,
+      notification: fields[8] as bool,
+      needsSync: fields[9] as bool,
+      lastUpdated: fields[10] as DateTime,
     );
   }
 
   @override
   void write(BinaryWriter writer, Reminder obj) {
     writer
-      ..writeByte(8)
+      ..writeByte(11)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
       ..write(obj.userId)
       ..writeByte(2)
-      ..write(obj.title)
+      ..write(obj.type)
       ..writeByte(3)
-      ..write(obj.description)
+      ..write(obj.title)
       ..writeByte(4)
-      ..write(obj.dateTime)
+      ..write(obj.description)
       ..writeByte(5)
-      ..write(obj.completed)
+      ..write(obj.dateTime)
       ..writeByte(6)
-      ..write(obj.needsSync)
+      ..write(obj.completed)
       ..writeByte(7)
+      ..write(obj.repeat)
+      ..writeByte(8)
+      ..write(obj.notification)
+      ..writeByte(9)
+      ..write(obj.needsSync)
+      ..writeByte(10)
       ..write(obj.lastUpdated);
   }
 

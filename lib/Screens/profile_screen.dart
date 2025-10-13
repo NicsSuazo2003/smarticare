@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'home_screen.dart';
 import 'progress_screen.dart';
@@ -49,6 +50,28 @@ void _updateEmail(BuildContext context) {
                     action: 'email_changed',
                     details: 'User changed email to $newEmail.',
                   );
+                  await FirebaseFirestore.instance
+                      .collection('admin_notifications')
+                      .add({
+                    'type': 'email_changed',
+                    'message': 'User changed email to $newEmail.',
+                    'createdAt': FieldValue.serverTimestamp(),
+                    'read': false,
+                    'relatedUserId':
+                        FirebaseAuth.instance.currentUser?.uid ?? "",
+                  });
+                  final userId = FirebaseAuth.instance.currentUser?.uid ?? "";
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(userId)
+                      .collection('notifications')
+                      .add({
+                    "type": "system",
+                    "title": "Email Updated",
+                    "message": "Your Email was updated successfully.",
+                    "timestamp": FieldValue.serverTimestamp(),
+                    "isRead": false,
+                  });
 
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Email updated successfully')),
@@ -70,49 +93,168 @@ void _updateEmail(BuildContext context) {
 }
 
 void _updatePassword(BuildContext context) {
-  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController currentPasswordController =
+      TextEditingController();
+  final TextEditingController newPasswordController = TextEditingController();
+  bool obscureCurrent = true;
+  bool obscureNew = true;
 
   showDialog(
     context: context,
     builder: (context) {
-      return AlertDialog(
-        title: const Text('Update Password'),
-        content: TextField(
-          controller: passwordController,
-          obscureText: true,
-          decoration: const InputDecoration(labelText: 'New Password'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CANCEL'),
-          ),
-          TextButton(
-            onPressed: () async {
-              try {
-                String newPassword = passwordController.text.trim();
-                if (newPassword.isNotEmpty) {
-                  await FirebaseAuth.instance.currentUser
-                      ?.updatePassword(newPassword);
-                  await AuditLogService.logAction(
-                    action: 'password_changed',
-                    details: 'User changed their password.',
-                  );
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Password updated successfully')),
-                  );
-                }
-                Navigator.pop(context);
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to update password: $e')),
-                );
-              }
-            },
-            child: const Text('UPDATE'),
-          ),
-        ],
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('Update Password'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ✅ CURRENT PASSWORD REQUIRED
+                TextField(
+                  controller: currentPasswordController,
+                  obscureText: obscureCurrent,
+                  decoration: InputDecoration(
+                    labelText: 'Current Password',
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureCurrent
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () =>
+                          setState(() => obscureCurrent = !obscureCurrent),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: newPasswordController,
+                  obscureText: obscureNew,
+                  decoration: InputDecoration(
+                    labelText: 'New Password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                          obscureNew ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => obscureNew = !obscureNew),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Password must be at least 8 characters',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('CANCEL'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  final currentPassword = currentPasswordController.text.trim();
+                  final newPassword = newPasswordController.text.trim();
+
+                  if (currentPassword.isEmpty || newPassword.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please fill all fields')),
+                    );
+                    return;
+                  }
+
+                  if (newPassword.length < 8) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content:
+                              Text('Password must be at least 8 characters')),
+                    );
+                    return;
+                  }
+
+                  try {
+                    final user = FirebaseAuth.instance.currentUser;
+                    if (user == null || user.email == null) {
+                      throw Exception('No user logged in');
+                    }
+
+                    // ✅ RE-AUTHENTICATE FIRST
+                    final credential = EmailAuthProvider.credential(
+                      email: user.email!,
+                      password: currentPassword,
+                    );
+
+                    await user.reauthenticateWithCredential(credential);
+
+                    // ✅ NOW UPDATE PASSWORD
+                    await user.updatePassword(newPassword);
+
+                    await AuditLogService.logAction(
+                      action: 'password_changed',
+                      details: 'User changed their password.',
+                    );
+
+                    await FirebaseFirestore.instance
+                        .collection('admin_notifications')
+                        .add({
+                      'type': 'password_changed',
+                      'message': 'User changed their password.',
+                      'createdAt': FieldValue.serverTimestamp(),
+                      'read': false,
+                      'relatedUserId': user.uid,
+                    });
+
+                    final userId = user.uid;
+                    await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(userId)
+                        .collection('notifications')
+                        .add({
+                      "type": "system",
+                      "title": "Password Updated",
+                      "message": "Your password was updated successfully.",
+                      "timestamp": FieldValue.serverTimestamp(),
+                      "isRead": false,
+                    });
+
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Password updated successfully'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } on FirebaseAuthException catch (e) {
+                    String errorMessage;
+                    if (e.code == 'wrong-password') {
+                      errorMessage = 'Current password is incorrect';
+                    } else if (e.code == 'weak-password') {
+                      errorMessage = 'New password is too weak';
+                    } else if (e.code == 'requires-recent-login') {
+                      errorMessage =
+                          'Please log out and log in again to change password';
+                    } else {
+                      errorMessage = 'Failed to update password: ${e.message}';
+                    }
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(errorMessage),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to update password: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('UPDATE'),
+              ),
+            ],
+          );
+        },
       );
     },
   );
@@ -145,6 +287,16 @@ void _deleteAccount(BuildContext context) {
                   action: 'account_deleted',
                   details: 'User deleted their account.',
                 );
+                await FirebaseFirestore.instance
+                    .collection('admin_notifications')
+                    .add({
+                  'type': 'account_deleted',
+                  'message': 'User deleted their account.',
+                  'createdAt': FieldValue.serverTimestamp(),
+                  'read': false,
+                  'relatedUserId': FirebaseAuth.instance.currentUser?.uid ?? "",
+                });
+
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Account deleted successfully')),
                 );
@@ -165,6 +317,7 @@ void _deleteAccount(BuildContext context) {
 
 void _logout(BuildContext context) async {
   try {
+    LatestScanCache.clearCache();
     await FirebaseAuth.instance.signOut(); // Sign out the user
     // Navigate to the login screen
     Navigator.pushReplacement(
@@ -731,6 +884,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onPressed: () async {
                 Navigator.pop(context); // Close the dialog first
                 try {
+                  LatestScanCache.clearCache();
                   await FirebaseAuth.instance.signOut(); // Sign out the user
                   // Navigate to the login screen
                   Navigator.pushAndRemoveUntil(
@@ -769,23 +923,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        actions: [
-          TextButton.icon(
-            onPressed: _showEditProfileDialog,
-            icon: const Icon(Icons.edit),
-            label: const Text('Edit'),
-            style: TextButton.styleFrom(
-              foregroundColor: primaryColor,
-            ),
-          ),
-        ],
       ),
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
           _buildProfileHeader(),
           _buildProfileDetails(),
-          _buildTimeSection(),
+
           _buildAccountSection(),
           _buildSupportSection(),
 
@@ -1012,78 +1156,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildTimeSection() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Current Time (UTC)',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(
-                Icons.access_time,
-                color: primaryColor,
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                '2025-06-16 15:06:52',
-                style: TextStyle(
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'User Login',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(
-                Icons.person,
-                color: primaryColor,
-                size: 18,
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'ArsisjayCreate',
-                style: TextStyle(
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildAccountSection() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1125,26 +1197,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: Icons.lock_outline,
             title: 'Change Password',
             onTap: _showChangePasswordDialog,
-          ),
-          _buildSettingTile(
-            icon: Icons.security_outlined,
-            title: 'Privacy Settings',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Privacy settings feature coming soon')),
-              );
-            },
-          ),
-          _buildSettingTile(
-            icon: Icons.download_outlined,
-            title: 'Download My Data',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('Data download feature coming soon')),
-              );
-            },
           ),
           _buildSettingTile(
             icon: Icons.delete_outline,

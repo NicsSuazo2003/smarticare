@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/Screens/complete_profile_screen.dart';
 import 'package:flutter_application_1/Screens/forgot_password_screen.dart';
+import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
 import 'package:flutter_application_1/Screens/symptom_assessment_screen.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_svg/svg.dart';
@@ -11,6 +12,7 @@ import '../user_session_provider.dart'; // adjust the path as needed
 import 'eye_scan_screen.dart'; // for direct navigation
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -29,49 +31,88 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _rememberMe = false;
 
+  Future<void> saveTokenToFirestore(String uid) async {
+    final token = await FirebaseMessaging.instance.getToken();
+    if (token != null) {
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'fcmToken': token,
+      });
+    }
+  }
+
   void _login() async {
     if (_formKey.currentState?.validate() ?? false) {
       setState(() => _isLoading = true);
 
       try {
-        // Save form state
         _formKey.currentState!.save();
 
-        // Authenticate with Firebase
+        // Authenticate
         UserCredential userCredential =
             await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: _email,
           password: _password,
         );
+
+        // ✅ CHECK EMAIL VERIFICATION
+        if (!userCredential.user!.emailVerified) {
+          await FirebaseAuth.instance.signOut();
+
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Email Not Verified'),
+              content: const Text(
+                'Please verify your email address before logging in.\n\n'
+                'Check your inbox for the verification link.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    try {
+                      await userCredential.user!.sendEmailVerification();
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Verification email sent!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } catch (e) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Failed to send email.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Resend Email'),
+                ),
+              ],
+            ),
+          );
+          return;
+        }
+        LatestScanCache.clearCache();
+
         await AuditLogService.logAction(
           action: 'login',
           details: 'User logged in with email: $_email',
         );
 
-        // After login, check if user needs onboarding flow
+        // Continue with normal login flow
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
+          await saveTokenToFirestore(user.uid);
           await _afterLoginFlow(context, user.uid);
         }
       } on FirebaseAuthException catch (e) {
-        // Handle Firebase-specific errors
-        String errorMessage;
-        if (e.code == 'user-not-found') {
-          errorMessage = 'No user found for that email.';
-        } else if (e.code == 'wrong-password') {
-          errorMessage = 'Incorrect password.';
-        } else {
-          errorMessage = 'An error occurred. Please try again.';
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage)),
-        );
-      } catch (e) {
-        // Handle other errors
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('An unexpected error occurred: $e')),
-        );
+        // ... existing error handling
       } finally {
         setState(() => _isLoading = false);
       }
@@ -204,6 +245,7 @@ class _LoginScreenState extends State<LoginScreen> {
           .collection('users')
           .doc(userCredential.user!.uid)
           .get();
+      await saveTokenToFirestore(userCredential.user!.uid);
 
       if (!userDoc.exists) {
         // No profile in Firestore: sign out and show error
@@ -253,6 +295,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final user = userCredential.user;
       if (user == null) return;
+      LatestScanCache.clearCache();
 
       // Check Firestore profile
       final doc = await FirebaseFirestore.instance

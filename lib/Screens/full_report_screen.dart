@@ -3,6 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'dart:math';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 import 'find_clinics_screen.dart';
 import 'reminder_screen.dart';
@@ -84,6 +87,40 @@ class _FullReportScreenState extends State<FullReportScreen> {
     });
   }
 
+  List<String> getTipsForPrediction(String prediction) {
+    final pred = prediction.toLowerCase();
+    if (pred.contains('normal') || pred.contains('no cataract')) {
+      return [
+        'Maintain a healthy diet rich in leafy greens and fish.',
+        'Wear sunglasses that block UV rays outdoors.',
+        'Schedule annual eye check-ups.',
+        'Take regular breaks from screens to reduce eye strain.',
+      ];
+    } else if (pred.contains('immature') || pred.contains('initial')) {
+      return [
+        'Monitor your vision for any changes.',
+        'Protect your eyes from sunlight with UV-blocking sunglasses.',
+        'Reduce night driving if glare or halos are noticed.',
+        'Consult your eye doctor for follow-up and advice.',
+      ];
+    } else if (pred.contains('mature') ||
+        pred.contains('severe') ||
+        pred.contains('advanced')) {
+      return [
+        'Consult an ophthalmologist as soon as possible.',
+        'Prepare questions for your doctor about treatment options.',
+        'Follow medical advice strictly.',
+        'Ensure good lighting at home to reduce accidents.',
+      ];
+    } else {
+      return [
+        'Repeat the scan in good lighting.',
+        'Make sure your eye is centered in the frame.',
+        'If problems persist, consult an eye care professional.',
+      ];
+    }
+  }
+
   // Helper function to format dates
   String _formatDate(String? date) {
     if (date == null || date.isEmpty) return '';
@@ -135,16 +172,291 @@ class _FullReportScreenState extends State<FullReportScreen> {
     );
   }
 
-  void _downloadPdf() {
-    AuditLogService.logAction(
-      action: 'report_downloaded',
-      details: 'ScanId: ${widget.scanId ?? "latest"}',
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Downloading report as PDF...'),
-        duration: Duration(seconds: 2),
+  Future<void> _downloadPdf() async {
+    final scan = _scan;
+    DateTime? scanDateTime;
+    if (scan != null && scan['timestamp'] != null) {
+      final ts = scan['timestamp'];
+      if (ts is Timestamp) {
+        scanDateTime = ts.toDate();
+      } else if (ts is String) {
+        scanDateTime = DateTime.tryParse(ts);
+      }
+    }
+    String reportDate = scanDateTime != null
+        ? "${scanDateTime.year}-${scanDateTime.month.toString().padLeft(2, '0')}-${scanDateTime.day.toString().padLeft(2, '0')}"
+        : "";
+    String reportTime = scanDateTime != null
+        ? "${scanDateTime.hour.toString().padLeft(2, '0')}:${scanDateTime.minute.toString().padLeft(2, '0')}"
+        : "";
+
+    final pdfDoc = pw.Document();
+
+    // Optionally add logo: load as Uint8List and use pw.MemoryImage
+    // final logo = await rootBundle.load('assets/logo.png');
+    // final logoImage = pw.MemoryImage(logo.buffer.asUint8List());
+
+    pdfDoc.addPage(
+      pw.MultiPage(
+        margin: const pw.EdgeInsets.all(32),
+        build: (context) => [
+          // Header
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              // Uncomment to use a logo
+              // pw.Image(logoImage, width: 56, height: 56),
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('SmartiCare Eye Health Center',
+                      style: pw.TextStyle(
+                        fontSize: 20,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.teal800,
+                      )),
+                  pw.Text('Cataract Screening Report',
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.grey700,
+                      )),
+                ],
+              ),
+              pw.Container(
+                  padding: const pw.EdgeInsets.all(8),
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.teal50,
+                    borderRadius: pw.BorderRadius.circular(8),
+                  ),
+                  child: pw.Text(
+                      '#SC${DateTime.now().millisecondsSinceEpoch % 100000}',
+                      style: pw.TextStyle(
+                          color: PdfColors.teal800,
+                          fontWeight: pw.FontWeight.bold))),
+            ],
+          ),
+          pw.Divider(thickness: 2, color: PdfColors.teal100),
+          pw.SizedBox(height: 12),
+
+          // Patient Information Card
+          pw.Container(
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey100,
+              borderRadius: pw.BorderRadius.circular(8),
+              border: pw.Border.all(color: PdfColors.teal50),
+            ),
+            padding: const pw.EdgeInsets.all(12),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Container(
+                  width: 48,
+                  height: 48,
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.teal50,
+                    shape: pw.BoxShape.circle,
+                  ),
+                  child: pw.Center(
+                    child: pw.Text(
+                      (_profile?['firstName'] ?? 'U')
+                          .toString()
+                          .substring(0, 1)
+                          .toUpperCase(),
+                      style: pw.TextStyle(
+                        fontSize: 26,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.teal800,
+                      ),
+                    ),
+                  ),
+                ),
+                pw.SizedBox(width: 12),
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        '${_profile?['firstName'] ?? 'N/A'} ${_profile?['lastName'] ?? ''}'
+                            .trim(),
+                        style: pw.TextStyle(
+                            fontWeight: pw.FontWeight.bold, fontSize: 16),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                          'Age: ${_profile?["age"] ?? "N/A"}   Gender: ${_profile?["gender"] ?? "N/A"}',
+                          style: const pw.TextStyle(fontSize: 12)),
+                      pw.Text('Patient ID: ${_profile?["patientId"] ?? "-"}',
+                          style: const pw.TextStyle(fontSize: 12)),
+                      pw.Text('Date of Birth: ${_profile?["birthDate"] ?? "-"}',
+                          style: const pw.TextStyle(fontSize: 12)),
+                    ],
+                  ),
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text('Date: $reportDate',
+                        style: const pw.TextStyle(fontSize: 12)),
+                    pw.Text('Time: $reportTime',
+                        style: const pw.TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 16),
+
+          // Section: Scan Summary
+          pw.Text('Scan Summary',
+              style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.teal800,
+                  fontSize: 15)),
+          pw.SizedBox(height: 4),
+          pw.Divider(color: PdfColors.teal100),
+          pw.SizedBox(height: 6),
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('Eye: ${scan?['eye'] ?? 'N/A'}',
+                  style: const pw.TextStyle(fontSize: 13)),
+              pw.Text('Result: ${scan?['prediction'] ?? 'N/A'}',
+                  style: pw.TextStyle(
+                      fontSize: 13,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.teal800)),
+            ],
+          ),
+          pw.SizedBox(height: 6),
+          pw.Row(children: [
+            pw.Text('Health Score: ', style: const pw.TextStyle(fontSize: 13)),
+            pw.Text('${scan?['healthScore'] ?? 'N/A'}%',
+                style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold, color: PdfColors.green800)),
+            pw.SizedBox(width: 16),
+            pw.Text('Risk Level: ', style: const pw.TextStyle(fontSize: 13)),
+            pw.Text('${scan?['riskLevel'] ?? 'N/A'}',
+                style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold, color: PdfColors.red800)),
+          ]),
+          pw.SizedBox(height: 10),
+          if (scan?['symptomScore'] != null)
+            pw.Text('Symptom Score: ${scan?['symptomScore']}',
+                style: const pw.TextStyle(fontSize: 12)),
+          if (scan?['scanDate'] != null)
+            pw.Text('Scan Date: ${scan?['scanDate']}',
+                style: const pw.TextStyle(fontSize: 12)),
+          pw.SizedBox(height: 16),
+
+          // Section: Recommendations / Tips
+          pw.Text('Evidence-Based Recommendations',
+              style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 15,
+                  color: PdfColors.teal800)),
+          pw.SizedBox(height: 4),
+          pw.Divider(color: PdfColors.teal100),
+          pw.SizedBox(height: 6),
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              ...getTipsForPrediction(scan?['prediction'] ?? '').map(
+                (tip) => pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('• ',
+                        style: pw.TextStyle(
+                            fontSize: 12, color: PdfColors.teal800)),
+                    pw.Expanded(
+                      child:
+                          pw.Text(tip, style: const pw.TextStyle(fontSize: 12)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 16),
+
+          // Section: Contact
+          pw.Text('Contact & Follow-Up',
+              style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 15,
+                  color: PdfColors.teal800)),
+          pw.SizedBox(height: 4),
+          pw.Divider(color: PdfColors.teal100),
+          pw.SizedBox(height: 4),
+          pw.Text('Phone: ${_profile?["contact"] ?? "N/A"}',
+              style: const pw.TextStyle(fontSize: 12)),
+          pw.Text('Email: ${_profile?["email"] ?? "N/A"}',
+              style: const pw.TextStyle(fontSize: 12)),
+          pw.Text('Address: ${_profile?["address"] ?? "N/A"}',
+              style: const pw.TextStyle(fontSize: 12)),
+          pw.SizedBox(height: 16),
+
+          // Section: Disclaimer
+          pw.Container(
+            padding: const pw.EdgeInsets.all(10),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey200,
+              borderRadius: pw.BorderRadius.circular(8),
+            ),
+            child: pw.Row(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Icon(pw.IconData(0xe88e),
+                    color: PdfColors.grey700, size: 18), // info icon
+                pw.SizedBox(width: 8),
+                pw.Expanded(
+                  child: pw.Text(
+                    'This report is generated based on computer vision analysis and self-reported symptoms. It is not a definitive medical diagnosis and should not replace professional medical advice. Always consult with a qualified eye care specialist for evaluation and treatment.',
+                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 16),
+
+          // Footer
+          pw.Center(
+            child: pw.Column(
+              children: [
+                pw.Text('SmartiCare™ Eye Analysis Platform',
+                    style: pw.TextStyle(
+                        fontSize: 13,
+                        fontWeight: pw.FontWeight.bold,
+                        color: PdfColors.teal800)),
+                pw.Text('Report generated on $reportDate at $reportTime UTC',
+                    style:
+                        pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+                pw.SizedBox(height: 8),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.center,
+                  children: [
+                    pw.Icon(pw.IconData(0xe6b1),
+                        color: PdfColors.teal800, size: 14), // verified icon
+                    pw.SizedBox(width: 6),
+                    pw.Text('Verified Report',
+                        style: pw.TextStyle(
+                            fontSize: 11,
+                            color: PdfColors.teal800,
+                            fontWeight: pw.FontWeight.bold)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
+    );
+
+    await Printing.sharePdf(
+      bytes: await pdfDoc.save(),
+      filename: 'Cataract_Report_${reportDate.replaceAll('-', '')}.pdf',
     );
   }
 
@@ -761,53 +1073,23 @@ class _FullReportScreenState extends State<FullReportScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _buildRecommendationItem(
-                          icon: Icons.calendar_month,
-                          title: 'Schedule Follow-up',
-                          description:
-                              'Book your next eye scan in 6 months to monitor any changes.',
-                          actionText: 'Set Reminder',
-                          onAction: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const ReminderScreen(),
-                              ),
-                            );
-                          },
+                        const Text(
+                          'Tips',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
-                        const Divider(),
-                        _buildRecommendationItem(
-                          icon: Icons.visibility,
-                          title: 'Professional Examination',
-                          description:
-                              'Schedule an annual comprehensive eye exam with an ophthalmologist.',
-                          actionText: 'Find Specialists',
-                          onAction: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const FindClinicsScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                        const Divider(),
-                        _buildRecommendationItem(
-                          icon: Icons.wb_sunny,
-                          title: 'Eye Protection',
-                          description:
-                              'Wear sunglasses with UVA/UVB protection outdoors to protect your eyes.',
-                          actionText: 'Learn More',
-                          onAction: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content:
-                                    Text('Opening eye protection guide...'),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
-                          },
+                        const SizedBox(height: 8),
+                        ...getTipsForPrediction(_scan?['prediction']).map(
+                          (tip) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2.0),
+                            child: Text('• $tip',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                )),
+                          ),
                         ),
                       ],
                     ),

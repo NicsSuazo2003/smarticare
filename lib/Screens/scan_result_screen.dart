@@ -1,7 +1,10 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
+import 'package:flutter_application_1/main.dart';
+import 'package:flutter_application_1/services/offline_sync_service.dart';
 import '../Screens/scoring_service.dart';
 import 'full_report_screen.dart';
 import 'view_history_screen.dart';
@@ -54,6 +57,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       final isGuest =
           Provider.of<UserSessionProvider>(context, listen: false).isGuest;
       if (isGuest) return;
+
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId == null) return;
 
@@ -72,15 +76,10 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         riskLevel = "High";
       }
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('scans')
-          .doc(widget.scanId)
-          .set({
+      final scanData = {
+        'scanId': widget.scanId,
         'confidence': widget.confidence,
         'eye': widget.eye,
-        // Don't try to split path on a URL; just store the URL and maybe the filename if you want
         'imageUrl': widget.imageUrl,
         'prediction': widget.prediction,
         'healthScore': computedHealthScore,
@@ -88,7 +87,35 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         'scanDate': widget.scanDate,
         'riskLevel': riskLevel,
         'timestamp': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        'userId': userId,
+      };
+
+      // ✅ Check if online
+      final connectivity =
+          Provider.of<ConnectivityProvider>(context, listen: false);
+
+      if (connectivity.isOnline) {
+        // Save directly to Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('scans')
+            .doc(widget.scanId)
+            .set(scanData, SetOptions(merge: true));
+
+        print('✅ Scan saved to Firestore');
+      } else {
+        // Save offline and queue for sync
+        await OfflineSyncService().saveScanOffline(scanData);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Scan saved offline - will sync when online'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
       await AuditLogService.logAction(
         action: 'scan_completed',
         details:
@@ -97,6 +124,40 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       );
     } catch (e) {
       print('Error saving scan result: $e');
+    }
+  }
+
+  List<String> getTipsForPrediction(String prediction) {
+    final pred = prediction.toLowerCase();
+    if (pred.contains('normal') || pred.contains('no cataract')) {
+      return [
+        'Maintain a healthy diet rich in leafy greens and fish.',
+        'Wear sunglasses that block UV rays outdoors.',
+        'Schedule annual eye check-ups.',
+        'Take regular breaks from screens to reduce eye strain.',
+      ];
+    } else if (pred.contains('immature') || pred.contains('initial')) {
+      return [
+        'Monitor your vision for any changes.',
+        'Protect your eyes from sunlight with UV-blocking sunglasses.',
+        'Reduce night driving if glare or halos are noticed.',
+        'Consult your eye doctor for follow-up and advice.',
+      ];
+    } else if (pred.contains('mature') ||
+        pred.contains('severe') ||
+        pred.contains('advanced')) {
+      return [
+        'Consult an ophthalmologist as soon as possible.',
+        'Prepare questions for your doctor about treatment options.',
+        'Follow medical advice strictly.',
+        'Ensure good lighting at home to reduce accidents.',
+      ];
+    } else {
+      return [
+        'Repeat the scan in good lighting.',
+        'Make sure your eye is centered in the frame.',
+        'If problems persist, consult an eye care professional.',
+      ];
     }
   }
 
@@ -165,9 +226,44 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
 
   Widget buildScanImage(String imageUrl) {
     if (imageUrl.startsWith('http')) {
-      return Image.network(imageUrl, height: 180, fit: BoxFit.cover);
+      return CachedNetworkImage(
+        imageUrl: imageUrl,
+        height: 180,
+        fit: BoxFit.cover,
+        placeholder: (context, url) => Container(
+          height: 180,
+          color: Colors.grey.shade200,
+          child: const Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+        errorWidget: (context, url, error) {
+          print('Error loading image: $error'); // ✅ Add logging
+          return Container(
+            height: 180,
+            color: Colors.grey.shade200,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const [
+                Icon(Icons.error_outline, size: 40, color: Colors.red),
+                SizedBox(height: 8),
+                Text('Failed to load image'),
+              ],
+            ),
+          );
+        },
+      );
     } else {
-      return Image.file(File(imageUrl), height: 180, fit: BoxFit.cover);
+      try {
+        return Image.file(File(imageUrl), height: 180, fit: BoxFit.cover);
+      } catch (e) {
+        print('Error loading file: $e');
+        return Container(
+          height: 180,
+          color: Colors.grey.shade200,
+          child: const Icon(Icons.error_outline, size: 40),
+        );
+      }
     }
   }
 
@@ -259,46 +355,6 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                     ),
                   ),
                 ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.access_time,
-                            size: 14, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text(
-                          "Current Date and Time (UTC): ${widget.scanDate}",
-                          style:
-                              const TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Icon(Icons.person,
-                            size: 14, color: Colors.grey.shade600),
-                        const SizedBox(width: 6),
-                        Text(
-                          "Current User's Login: $username",
-                          style:
-                              const TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
               ),
             ),
             Expanded(
@@ -617,6 +673,8 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                               height: 1.5,
                             ),
                           ),
+                          const SizedBox(height: 16),
+                          _buildTipsSection(widget.prediction),
                         ],
                       ),
                     ),
@@ -894,6 +952,27 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         ),
       ),
       bottomNavigationBar: _buildBottomNavigationBar(primaryColor),
+    );
+  }
+
+  Widget _buildTipsSection(String prediction) {
+    final tips = getTipsForPrediction(prediction);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Tips',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ...tips.map((tip) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2.0),
+              child: Text('• $tip'),
+            )),
+      ],
     );
   }
 

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_application_1/Screens/eye_scan_screen.dart';
+import 'package:flutter_application_1/Screens/symptom_assessment_screen.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:intl/intl.dart';
 
@@ -112,14 +114,59 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         const SnackBar(content: Text('Profile completed!')),
       );
 
-      // Replace with your home or permission screen
-      Navigator.pushReplacementNamed(context, '/home');
+      // ✅ CHANGED: Check if they need assessment/scan first
+      await _afterProfileComplete(context, widget.uid);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  // Add this method to CompleteProfileScreen
+  Future<void> _afterProfileComplete(
+      BuildContext context, String userId) async {
+    final firestore = FirebaseFirestore.instance;
+
+    // 1. Check for assessment history
+    final assessments = await firestore
+        .collection('users')
+        .doc(userId)
+        .collection('assessments')
+        .limit(1)
+        .get();
+
+    // 2. Check for scan history
+    final scans = await firestore
+        .collection('users')
+        .doc(userId)
+        .collection('scans')
+        .limit(1)
+        .get();
+
+    if (assessments.docs.isEmpty || scans.docs.isEmpty) {
+      // If either is missing, go to the assessment flow
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SymptomAssessmentScreen(
+            onStart: () {
+              // After assessment, go to Eye Scan
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => EyeScanScreen(symptomScore: 0.0),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    } else {
+      // User already has data, go to Home
+      Navigator.pushReplacementNamed(context, '/home');
     }
   }
 

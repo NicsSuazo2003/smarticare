@@ -326,6 +326,28 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                                             ["status"] =
                                                         "Cancelled";
                                                   });
+                                                  // ---> Paste notification write here
+                                                  final userId = FirebaseAuth
+                                                          .instance
+                                                          .currentUser
+                                                          ?.uid ??
+                                                      "";
+                                                  await FirebaseFirestore
+                                                      .instance
+                                                      .collection('users')
+                                                      .doc(userId)
+                                                      .collection(
+                                                          'notifications')
+                                                      .add({
+                                                    "type": "appointment",
+                                                    "title":
+                                                        "Appointment Cancelled",
+                                                    "message":
+                                                        "Your appointment at ${appointment["clinicName"]} on ${appointment["date"]} at ${appointment["time"]} was cancelled.",
+                                                    "timestamp": FieldValue
+                                                        .serverTimestamp(),
+                                                    "isRead": false,
+                                                  });
                                                   // AUDIT LOG HERE
                                                   await AuditLogService
                                                       .logAction(
@@ -335,6 +357,27 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                                         'Cancelled appointment at ${appointment["clinicName"]} on ${appointment["date"]} at ${appointment["time"]}.',
                                                     appointmentId: id,
                                                   );
+                                                  // Admin notification for appointment cancelled
+                                                  await FirebaseFirestore
+                                                      .instance
+                                                      .collection(
+                                                          'admin_notifications')
+                                                      .add({
+                                                    'type':
+                                                        'appointment_cancelled',
+                                                    'message':
+                                                        'Appointment at ${appointment["clinicName"]} on ${appointment["date"]} at ${appointment["time"]} cancelled by user.',
+                                                    'createdAt': FieldValue
+                                                        .serverTimestamp(),
+                                                    'read': false,
+                                                    'relatedUserId':
+                                                        FirebaseAuth
+                                                                .instance
+                                                                .currentUser
+                                                                ?.uid ??
+                                                            "",
+                                                    'appointmentId': id,
+                                                  });
                                                   ScaffoldMessenger.of(context)
                                                       .showSnackBar(
                                                     const SnackBar(

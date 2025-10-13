@@ -101,41 +101,6 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                 color: Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(5),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Date/time display
-                  Wrap(
-                    children: [
-                      Icon(Icons.access_time,
-                          size: 14, color: Colors.grey.shade600),
-                      const SizedBox(width: 6),
-                      const Text(
-                        "Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): 2025-06-16 14:59:20",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  // User info
-                  Row(
-                    children: [
-                      Icon(Icons.person, size: 14, color: Colors.grey.shade600),
-                      const SizedBox(width: 6),
-                      const Text(
-                        "Current User's Login: ArsisjayCreate",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
             ),
           ),
 
@@ -226,17 +191,19 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  _buildBulletItem('To provide and maintain our Application'),
-                  _buildBulletItem('To process and analyze eye scan results'),
                   _buildBulletItem(
-                      'To provide personalized health recommendations'),
+                      'Provide and improve our medical screening and health monitoring services'),
                   _buildBulletItem(
-                      'To notify you about changes to our Application'),
+                      'Analyze eye images and symptoms using AI and medical guidelines'),
                   _buildBulletItem(
-                      'To allow you to participate in interactive features when you choose to do so'),
+                      'Personalize your experience and recommendations'),
+                  _buildBulletItem(
+                      'Communicate important updates, results, or reminders'),
+                  _buildBulletItem(
+                      'Comply with legal, regulatory, and ethical obligations'),
                   _buildBulletItem('To provide customer support'),
                   _buildBulletItem(
-                      'To gather analysis or valuable information so that we can improve our Application'),
+                      'Conduct anonymized research and analytics (you will never be personally identified in published results)'),
                   _buildBulletItem('To monitor usage of our Application'),
                   _buildBulletItem(
                       'To detect, prevent, and address technical issues'),
@@ -322,10 +289,6 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   _buildBulletItem(
                       'Object to the processing of your personal data'),
                   _buildBulletItem(
-                      'Request restrictions on the processing of your personal data'),
-                  _buildBulletItem(
-                      'Request the transfer of your personal data to you or a third party'),
-                  _buildBulletItem(
                       'Withdraw consent at any time where we relied on your consent to process your personal data'),
                   const SizedBox(height: 20),
 
@@ -359,10 +322,10 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   const SizedBox(height: 10),
                   const Text(
                     'If you have any questions about this Privacy Policy, please contact us at:'
-                    '\n\nSmartiCare, Inc.'
+                    '\n\nSmartiCare.'
                     '\nEmail: privacy@smarticare.com'
-                    '\nPhone: +1-800-EYE-CARE'
-                    '\nAddress: 123 Health Plaza, Suite 500, San Francisco, CA 94105, USA',
+                    '\nPhone: 09071355012'
+                    '\nAddress: Brgy. Poblacion, Sta. Maria, Davao Occidental',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,

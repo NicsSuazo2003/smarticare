@@ -71,6 +71,23 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
     }
   }
 
+  Future<File> compressImage(File file) async {
+    final bytes = await file.readAsBytes();
+    img.Image? image = img.decodeImage(bytes);
+
+    // Resize if too large
+    if (image!.width > 1024 || image.height > 1024) {
+      image = img.copyResize(image, width: 1024);
+    }
+
+    // Compress
+    final compressed = img.encodeJpg(image, quality: 85);
+    final compressedFile = File('${file.path}_compressed.jpg');
+    await compressedFile.writeAsBytes(compressed);
+
+    return compressedFile;
+  }
+
   Future<File> _cropImageToSquare(File imageFile, double overlaySize,
       double previewW, double previewH) async {
     // Load the image using the image package
@@ -173,6 +190,8 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
       String scanId = "";
       String imageUrl = "";
       if (!isGuest) {
+        LatestScanCache.updateLeftEye(
+            result['predictedClass'], result['confidence']);
         scanId = await _eyeScanService.saveScanResult(
           imageFile: croppedImage,
           prediction: result['predictedClass'],
@@ -180,6 +199,41 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
           eye: _selectedEye,
           symptomScore: widget.symptomScore,
         );
+        // ---> Paste notification write here
+        final userId = FirebaseAuth.instance.currentUser?.uid ?? "";
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('notifications')
+            .add({
+          "type": "scan",
+          "title": "Eye Scan Result Ready",
+          "message": "Your eye scan result is ready to view.",
+          "timestamp": FieldValue.serverTimestamp(),
+          "isRead": false,
+        });
+        if (result['predictedClass']
+                .toString()
+                .toLowerCase()
+                .contains("mature") ||
+            result['predictedClass']
+                .toString()
+                .toLowerCase()
+                .contains("high risk")) {
+          // ---> Paste notification write here
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('notifications')
+              .add({
+            "type": "scan",
+            "title": "High Risk Scan Alert",
+            "message":
+                "Your latest scan indicates a high risk. Please consult your doctor.",
+            "timestamp": FieldValue.serverTimestamp(),
+            "isRead": false,
+          });
+        }
         await AuditLogService.logAction(
           action: 'eye_scan_performed',
           details:
@@ -275,6 +329,8 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
           String scanId = "";
           String imageUrl = "";
           if (!isGuest) {
+            LatestScanCache.updateLeftEye(
+                result['predictedClass'], result['confidence']);
             scanId = await _eyeScanService.saveScanResult(
               imageFile: _selectedImage!,
               prediction: result['predictedClass'],
@@ -593,24 +649,27 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
               ),
             ),
             // Overlay text
-            const Positioned(
-              top: 20,
+            Positioned(
+              top: 32,
               left: 0,
               right: 0,
               child: Center(
-                child: Text(
-                  'Align your eye in the square',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    shadows: [
-                      Shadow(
-                        offset: Offset(0, 1),
-                        blurRadius: 3.0,
-                        color: Colors.black54,
-                      ),
-                    ],
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 10, horizontal: 18),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Text(
+                    "Position your eye in the square for best results.\n\nHold steady and avoid blinking.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      height: 1.4,
+                    ),
                   ),
                 ),
               ),
@@ -693,6 +752,32 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                 ),
               ),
             ),
+            // LOADING OVERLAY
+            if (_isCapturing)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black.withOpacity(0.5),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        CircularProgressIndicator(
+                          color: Colors.white,
+                        ),
+                        SizedBox(height: 18),
+                        Text(
+                          'Processing...',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
           ],
         );
       },
@@ -705,49 +790,6 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.access_time,
-                        size: 14, color: Colors.grey.shade600),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        "Current Date and Time (UTC): ${DateTime.now().toUtc().toString().split('.').first}",
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.person, size: 14, color: Colors.grey.shade600),
-                    const SizedBox(width: 6),
-                    const Text(
-                      "Current User's Login: tmae20",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: 16),
           const Text(
             'Cataract Eye Scan',

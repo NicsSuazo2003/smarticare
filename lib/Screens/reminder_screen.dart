@@ -2,10 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
+import 'package:flutter_application_1/reminder_model.dart';
+import 'package:flutter_application_1/utils/connectivity_service.dart';
 import 'package:intl/intl.dart';
 import 'home_screen.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'progress_screen.dart';
 import 'profile_screen.dart';
+import 'package:timezone/timezone.dart' as tz;
 import 'symptom_assessment_screen.dart';
 
 class ReminderScreen extends StatefulWidget {
@@ -16,8 +20,12 @@ class ReminderScreen extends StatefulWidget {
 }
 
 class _ReminderScreenState extends State<ReminderScreen> {
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
   int _selectedTab = 0; // 0: Today, 1: Upcoming, 2: Completed
   int _selectedNavIndex = 3; // 3: Reminders as active tab
+  List<Map<String, dynamic>> _notifications = [];
+  bool _loadingNotifications = true;
 
   List<Map<String, dynamic>> _reminders = [];
   bool _loading = true;
@@ -26,6 +34,69 @@ class _ReminderScreenState extends State<ReminderScreen> {
   void initState() {
     super.initState();
     _fetchReminders();
+    _fetchNotifications();
+  }
+
+  Future<void> _fetchNotifications() async {
+    setState(() => _loadingNotifications = true);
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _notifications = [];
+        _loadingNotifications = false;
+      });
+      return;
+    }
+    final notificationSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('notifications')
+        .orderBy('timestamp', descending: true)
+        .get();
+
+    final userNotifications = notificationSnapshot.docs.map((doc) {
+      final data = doc.data();
+      return {
+        "id": doc.id,
+        "type": data["type"] ?? "",
+        "title": data["title"] ?? "",
+        "message": data["message"] ?? "",
+        "timestamp": (data["timestamp"] is Timestamp)
+            ? (data["timestamp"] as Timestamp).toDate()
+            : DateTime.tryParse(data["timestamp"]?.toString() ?? ""),
+        "isRead": data["isRead"] ?? false,
+      };
+    }).toList();
+
+    setState(() {
+      _notifications = userNotifications;
+      _loadingNotifications = false;
+    });
+  }
+
+// Then update the _scheduleNotification method:
+  Future<void> _scheduleNotification(Reminder reminder) async {
+    final tz.TZDateTime scheduledDate = tz.TZDateTime.from(
+      reminder.dateTime,
+      tz.local,
+    );
+
+    await flutterLocalNotificationsPlugin.zonedSchedule(
+      reminder.id.hashCode,
+      reminder.title,
+      reminder.description,
+      scheduledDate,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'reminder_channel',
+          'Reminders',
+          importance: Importance.high,
+        ),
+      ),
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      matchDateTimeComponents: DateTimeComponents.dateAndTime,
+    );
   }
 
   Future<void> _fetchReminders() async {
@@ -90,6 +161,17 @@ class _ReminderScreenState extends State<ReminderScreen> {
                   action: 'reminder_deleted',
                   details: 'Reminder with id "$id" deleted.',
                 );
+                await FirebaseFirestore.instance
+                    .collection('admin_notifications')
+                    .add({
+                  'type': 'reminder_deleted',
+                  'message':
+                      'Reminder titled "${_reminders[index]["title"]}" deleted by user.',
+                  'createdAt': FieldValue.serverTimestamp(),
+                  'read': false,
+                  'relatedUserId': FirebaseAuth.instance.currentUser?.uid ?? "",
+                  'reminderId': _reminders[index]["id"],
+                });
                 _fetchReminders();
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -228,6 +310,25 @@ class _ReminderScreenState extends State<ReminderScreen> {
                             .update({
                           "completed": newStatus,
                         });
+                        // ---> Paste notification write here
+                        final userId =
+                            FirebaseAuth.instance.currentUser?.uid ?? "";
+                        await FirebaseFirestore.instance
+                            .collection('users')
+                            .doc(userId)
+                            .collection('notifications')
+                            .add({
+                          "type": "reminder",
+                          "title": newStatus
+                              ? "Reminder Completed"
+                              : "Reminder Updated",
+                          "message": newStatus
+                              ? "You marked '${reminder["title"]}' as completed. Great job!"
+                              : "You updated the status of '${reminder["title"]}'.",
+                          "timestamp": FieldValue.serverTimestamp(),
+                          "isRead": false,
+                        });
+                        _fetchNotifications();
                         await AuditLogService.logAction(
                           action: newStatus
                               ? 'reminder_completed'
@@ -235,6 +336,20 @@ class _ReminderScreenState extends State<ReminderScreen> {
                           details:
                               'Reminder with id "$id" marked as ${newStatus ? "completed" : "incomplete"}.',
                         );
+                        if (newStatus) {
+                          await FirebaseFirestore.instance
+                              .collection('admin_notifications')
+                              .add({
+                            'type': 'reminder_completed',
+                            'message':
+                                'Reminder titled "${reminder["title"]}" marked as completed by user.',
+                            'createdAt': FieldValue.serverTimestamp(),
+                            'read': false,
+                            'relatedUserId':
+                                FirebaseAuth.instance.currentUser?.uid ?? "",
+                            'reminderId': reminder["id"],
+                          });
+                        }
                         _fetchReminders();
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -385,41 +500,221 @@ class _ReminderScreenState extends State<ReminderScreen> {
   }
 
   void _openNewReminderDialog() async {
+    final isOnline = await ConnectivityService.showOfflineDialog(context);
+    if (!isOnline) return;
+
     final newReminder = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => const _NewReminderDialog(),
     );
+
     if (newReminder != null) {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
-      await FirebaseFirestore.instance.collection('reminders').add({
-        ...newReminder,
-        "userId": user.uid,
-        "dateTime":
-            newReminder["dateTime"], // DateTime, will be stored as Timestamp
+
+      // ✅ OPTIMISTIC UPDATE: Add to UI immediately
+      final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+      setState(() {
+        _reminders.insert(0, {
+          "id": tempId,
+          "type": newReminder["type"],
+          "title": newReminder["title"],
+          "description": newReminder["description"],
+          "dateTime": newReminder["dateTime"],
+          "completed": false,
+          "repeat": newReminder["repeat"],
+          "notification": newReminder["notification"],
+          "_isPending": true, // ✅ Mark as pending
+        });
       });
-      await AuditLogService.logAction(
-        action: 'reminder_created',
-        details: 'Reminder titled "${newReminder["title"]}" created for user.',
-      );
-      _fetchReminders();
-      Future.delayed(const Duration(milliseconds: 100), () {
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text("Reminder Saved!"),
-            content: const Text(
-                "Your reminder has been successfully saved. You can view it in your reminders list."),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("OK"),
-              )
-            ],
+
+      try {
+        // Save to Firestore in background
+        var docRef =
+            await FirebaseFirestore.instance.collection('reminders').add({
+          ...newReminder,
+          "userId": user.uid,
+          "dateTime": newReminder["dateTime"],
+        });
+
+        // ✅ UPDATE WITH REAL ID
+        setState(() {
+          final index = _reminders.indexWhere((r) => r["id"] == tempId);
+          if (index != -1) {
+            _reminders[index]["id"] = docRef.id;
+            _reminders[index].remove("_isPending");
+          }
+        });
+
+        // Notifications and audit logs
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('notifications')
+            .add({
+          "type": "reminder",
+          "title": "Reminder Created",
+          "message": "You created a reminder: '${newReminder["title"]}'.",
+          "timestamp": FieldValue.serverTimestamp(),
+          "isRead": false,
+        });
+
+        await FirebaseFirestore.instance.collection('admin_notifications').add({
+          'type': 'reminder_created',
+          'message':
+              'Reminder titled "${newReminder["title"]}" created by user.',
+          'createdAt': FieldValue.serverTimestamp(),
+          'read': false,
+          'relatedUserId': user.uid,
+          'reminderId': docRef.id,
+        });
+
+        await AuditLogService.logAction(
+          action: 'reminder_created',
+          details:
+              'Reminder titled "${newReminder["title"]}" created for user.',
+        );
+
+        _fetchNotifications();
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reminder saved successfully!'),
+            backgroundColor: Colors.green,
           ),
         );
+      } catch (e) {
+        // ✅ ROLLBACK ON ERROR
+        setState(() {
+          _reminders.removeWhere((r) => r["id"] == tempId);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to create reminder: $e'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _openNewReminderDialog(),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Widget _buildNotificationsTab() {
+    IconData _iconForType(String type) {
+      switch (type) {
+        case "appointment":
+          return Icons.event_note;
+        case "reminder":
+          return Icons.alarm;
+        case "scan":
+          return Icons.remove_red_eye;
+        case "system":
+          return Icons.settings;
+        case "tip":
+          return Icons.health_and_safety;
+        default:
+          return Icons.notifications;
+      }
+    }
+
+    Future<void> _markAsRead(String notificationId) async {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('notifications')
+          .doc(notificationId)
+          .update({'isRead': true});
+      setState(() {
+        final idx = _notifications.indexWhere((n) => n["id"] == notificationId);
+        if (idx != -1) _notifications[idx]["isRead"] = true;
       });
     }
+
+    void _showMessageDialog(Map<String, dynamic> notification) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(_iconForType(notification["type"]), color: Colors.blue),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  notification["title"] ?? "Notification",
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: Text(notification["message"] ?? ""),
+          actions: [
+            if (!(notification["isRead"] ?? false))
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _markAsRead(notification["id"]);
+                },
+                child: const Text('Mark as Read'),
+              ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return _loadingNotifications
+        ? const Center(child: CircularProgressIndicator())
+        : _notifications.isEmpty
+            ? Center(
+                child: Text(
+                  "No notifications yet.",
+                  style: TextStyle(color: Colors.grey.shade500, fontSize: 16),
+                ),
+              )
+            : ListView.builder(
+                itemCount: _notifications.length,
+                itemBuilder: (context, index) {
+                  final notification = _notifications[index];
+                  final isUnread = !(notification["isRead"] ?? false);
+                  return ListTile(
+                    title: Text(
+                      notification["title"] ?? "",
+                      style: TextStyle(
+                        fontWeight:
+                            isUnread ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                    subtitle: Text(notification["message"] ?? ""),
+                    trailing: Text(
+                      notification["timestamp"] != null
+                          ? DateFormat.yMd()
+                              .add_jm()
+                              .format(notification["timestamp"])
+                          : "",
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    leading: Icon(
+                      _iconForType(notification["type"] ?? ""),
+                      color: isUnread ? Colors.blue : Colors.grey,
+                    ),
+                    onTap: () {
+                      _showMessageDialog(notification);
+                      if (isUnread) _markAsRead(notification["id"]);
+                    },
+                  );
+                },
+              );
   }
 
   @override
@@ -512,167 +807,156 @@ class _ReminderScreenState extends State<ReminderScreen> {
                 ),
                 const SizedBox(height: 4),
                 // Split the date/time and user info into separate containers to avoid overflow
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(5),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Date/time display
-                      Row(
-                        children: [
-                          Icon(Icons.access_time,
-                              size: 14, color: Colors.grey.shade600),
-                          const SizedBox(width: 6),
-                          const Text(
-                            "UTC: 2025-06-15 17:11:22",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      // User info
-                      Row(
-                        children: [
-                          Icon(Icons.person,
-                              size: 14, color: Colors.grey.shade600),
-                          const SizedBox(width: 6),
-                          const Text(
-                            "User: Arsisjayright",
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
           // Tabs
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            child: Row(
-              children: [
-                _buildTab("Today", 0),
-                const SizedBox(width: 18),
-                _buildTab("Upcoming", 1),
-                const SizedBox(width: 18),
-                _buildTab("Completed", 2),
-              ],
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _buildTab("Today", 0),
+                  const SizedBox(width: 18),
+                  _buildTab("Upcoming", 1),
+                  const SizedBox(width: 18),
+                  _buildTab("Completed", 2),
+                  const SizedBox(width: 18),
+                  _buildTab("Notifications", 3), // <-- Added Notifications tab
+                ],
+              ),
             ),
           ),
           // Reminders list
           Expanded(
-            child: filteredReminders.isEmpty
-                ? Center(
-                    child: Text(
-                      _selectedTab == 2
-                          ? "No completed reminders."
-                          : "No reminders found.",
-                      style: TextStyle(
-                        color: Colors.grey.shade500,
-                        fontSize: 16,
-                      ),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 10),
-                    itemCount: filteredReminders.length,
-                    itemBuilder: (context, idx) {
-                      final r = filteredReminders[idx];
-                      final dt = r["dateTime"] as DateTime;
-
-                      // Find the original index in the main reminders list
-                      // Find the original index in the main reminders list
-                      final originalIndex = _reminders.indexWhere((element) =>
-                          element["title"] == r["title"] &&
-                          element["dateTime"] == r["dateTime"]);
-
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        elevation: 2,
-                        child: InkWell(
-                          onTap: () =>
-                              _showReminderDetailsDialog(r, originalIndex),
-                          borderRadius: BorderRadius.circular(15),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                            leading: r["type"] == "Medication"
-                                ? const Icon(Icons.medication,
-                                    color: primaryColor)
-                                : const Icon(Icons.remove_red_eye,
-                                    color: primaryColor),
-                            title: Text(
-                              r["title"],
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
+            child: _selectedTab == 3
+                ? _buildNotificationsTab() // New branch to show Notifications
+                : _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : filteredReminders.isEmpty
+                        ? Center(
+                            child: Text(
+                              _selectedTab == 2
+                                  ? "No completed reminders."
+                                  : "No reminders found.",
+                              style: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 16,
+                              ),
                             ),
-                            subtitle: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (r["description"] != null &&
-                                    r["description"].toString().isNotEmpty)
-                                  Text(r["description"],
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis),
-                                Text(
-                                  "${DateFormat.yMMMEd().format(dt)} at ${DateFormat.jm().format(dt)}",
-                                  style: TextStyle(
-                                      color: Colors.grey.shade700,
-                                      fontSize: 13),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
+                            itemCount: filteredReminders.length,
+                            itemBuilder: (context, idx) {
+                              final r = filteredReminders[idx];
+                              final dt = r["dateTime"] as DateTime;
+
+                              // Find the original index in the main reminders list
+                              // Find the original index in the main reminders list
+                              final originalIndex = _reminders.indexWhere(
+                                  (element) =>
+                                      element["title"] == r["title"] &&
+                                      element["dateTime"] == r["dateTime"]);
+
+                              // In the ListView.builder for reminders, update the ListTile:
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(15),
                                 ),
-                                if (r["repeat"] != null &&
-                                    r["repeat"] != "None")
-                                  Text("Repeat: ${r["repeat"]}",
-                                      style: const TextStyle(fontSize: 13)),
-                                if (r["notification"] == true)
-                                  const Row(
+                                elevation: 2,
+                                child: InkWell(
+                                  onTap: () => _showReminderDetailsDialog(
+                                      r, originalIndex),
+                                  borderRadius: BorderRadius.circular(15),
+                                  child: Stack(
                                     children: [
-                                      Icon(Icons.notifications_active,
-                                          size: 16, color: Colors.green),
-                                      SizedBox(width: 4),
-                                      Text("Notification On",
-                                          style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.green)),
+                                      ListTile(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 16, vertical: 8),
+                                        leading: r["type"] == "Medication"
+                                            ? const Icon(Icons.medication,
+                                                color: primaryColor)
+                                            : const Icon(Icons.remove_red_eye,
+                                                color: primaryColor),
+                                        title: Text(
+                                          r["title"],
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold),
+                                        ),
+                                        subtitle: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            if (r["description"] != null &&
+                                                r["description"]
+                                                    .toString()
+                                                    .isNotEmpty)
+                                              Text(r["description"],
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis),
+                                            Text(
+                                              "${DateFormat.yMMMEd().format(dt)} at ${DateFormat.jm().format(dt)}",
+                                              style: TextStyle(
+                                                  color: Colors.grey.shade700,
+                                                  fontSize: 13),
+                                            ),
+                                            if (r["repeat"] != null &&
+                                                r["repeat"] != "None")
+                                              Text("Repeat: ${r["repeat"]}",
+                                                  style: const TextStyle(
+                                                      fontSize: 13)),
+                                            if (r["notification"] == true)
+                                              const Row(
+                                                children: [
+                                                  Icon(
+                                                      Icons
+                                                          .notifications_active,
+                                                      size: 16,
+                                                      color: Colors.green),
+                                                  SizedBox(width: 4),
+                                                  Text("Notification On",
+                                                      style: TextStyle(
+                                                          fontSize: 12,
+                                                          color: Colors.green)),
+                                                ],
+                                              )
+                                          ],
+                                        ),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (_selectedTab == 2)
+                                              Icon(Icons.check_circle,
+                                                  color: Colors.green.shade600),
+                                            // ✅ SHOW SYNCING INDICATOR
+                                            if (r["_isPending"] == true)
+                                              const SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                        strokeWidth: 2),
+                                              )
+                                            else
+                                              const Icon(
+                                                  Icons.arrow_forward_ios,
+                                                  size: 16,
+                                                  color: Colors.grey),
+                                          ],
+                                        ),
+                                      ),
                                     ],
-                                  )
-                              ],
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (_selectedTab == 2)
-                                  Icon(Icons.check_circle,
-                                      color: Colors.green.shade600),
-                                const Icon(
-                                  Icons.arrow_forward_ios,
-                                  size: 16,
-                                  color: Colors.grey,
+                                  ),
                                 ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
-                        ),
-                      );
-                    },
-                  ),
           ),
           // Create new reminder button
           SafeArea(
@@ -798,6 +1082,7 @@ class _NewReminderDialogState extends State<_NewReminderDialog> {
   TimeOfDay? _time;
   String _repeat = "None";
   bool _notification = true;
+  bool _isLoading = false;
 
   final List<String> repeatOptions = ["None", "Daily", "Weekly", "Monthly"];
 
@@ -819,29 +1104,48 @@ class _NewReminderDialogState extends State<_NewReminderDialog> {
     if (picked != null) setState(() => _time = picked);
   }
 
-  void _save() {
+  void _save() async {
+    // ✅ MAKE ASYNC
     if (_title.text.trim().isEmpty || _date == null || _time == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill title, date and time')),
       );
       return;
     }
-    final DateTime finalDateTime = DateTime(
-      _date!.year,
-      _date!.month,
-      _date!.day,
-      _time!.hour,
-      _time!.minute,
-    );
-    Navigator.pop(context, {
-      "type": _type,
-      "title": _title.text.trim(),
-      "description": _desc.text.trim(),
-      "dateTime": finalDateTime,
-      "completed": false,
-      "repeat": _repeat,
-      "notification": _notification,
+
+    setState(() {
+      _isLoading = true; // ✅ SHOW LOADING
     });
+
+    try {
+      final DateTime finalDateTime = DateTime(
+        _date!.year,
+        _date!.month,
+        _date!.day,
+        _time!.hour,
+        _time!.minute,
+      );
+
+      Navigator.pop(context, {
+        "type": _type,
+        "title": _title.text.trim(),
+        "description": _desc.text.trim(),
+        "dateTime": finalDateTime,
+        "completed": false,
+        "repeat": _repeat,
+        "notification": _notification,
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to create reminder. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -979,7 +1283,7 @@ class _NewReminderDialogState extends State<_NewReminderDialog> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _isLoading ? null : () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       foregroundColor: primaryColor,
@@ -990,13 +1294,22 @@ class _NewReminderDialogState extends State<_NewReminderDialog> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _save,
+                    onPressed: _isLoading ? null : _save,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text("Save Reminder"),
+                    child: _isLoading // ✅ SHOW SPINNER
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text("Save Reminder"),
                   ),
                 ),
               ],

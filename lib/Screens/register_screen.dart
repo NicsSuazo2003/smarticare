@@ -4,6 +4,7 @@ import 'package:flutter_application_1/Screens/symptom_assessment_screen.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:intl/intl.dart'; // For date formatting
 import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -70,47 +71,139 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  String _getReadableError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'weak-password':
+        return 'Password is too weak. Use at least 8 characters with numbers and symbols.';
+      case 'email-already-in-use':
+        return 'An account already exists with this email address.';
+      case 'invalid-email':
+        return 'Please enter a valid email address.';
+      case 'operation-not-allowed':
+        return 'Email/password accounts are not enabled. Please contact support.';
+      case 'network-request-failed':
+        return 'Network error. Please check your internet connection.';
+      default:
+        return 'Registration failed. Please try again.';
+    }
+  }
+
   void _registerUser() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        // 1. Create user with Firebase Authentication
-        UserCredential userCredential =
-            await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
+    if (!_formKey.currentState!.validate()) return;
 
-        // 2. Save additional user data to Firestore
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .set({
-          'firstName': _firstNameController.text.trim(),
-          'middleName': _middleNameController.text.trim(),
-          'lastName': _lastNameController.text.trim(),
-          'gender': _selectedGender,
-          'birthDate': _selectedDate != null
-              ? DateFormat('yyyy-MM-dd').format(_selectedDate!)
-              : null,
-          'email': _emailController.text.trim(),
-          'phone': _phoneController.text.trim(),
-          'address': _addressController.text.trim(),
-          'city': _cityController.text.trim(),
-          'zipCode': _zipCodeController.text.trim(),
-          'username': _usernameController.text.trim(),
-          'createdAt': DateTime.now().toIso8601String(),
-          'role': 'Patient',
-        });
+    setState(() => _isLoading = true);
 
-        // 3. After successful registration, start onboarding flow
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          await _afterRegisterFlow(context, user.uid);
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+    try {
+      // Create user
+      UserCredential userCredential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      // ✅ SEND VERIFICATION EMAIL
+      await userCredential.user!.sendEmailVerification();
+
+      // Save user data to Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .set({
+        'firstName': _firstNameController.text.trim(),
+        'middleName': _middleNameController.text.trim(),
+        'lastName': _lastNameController.text.trim(),
+        'gender': _selectedGender,
+        'birthDate': _selectedDate != null
+            ? DateFormat('yyyy-MM-dd').format(_selectedDate!)
+            : null,
+        'email': _emailController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'address': _addressController.text.trim(),
+        'city': _cityController.text.trim(),
+        'zipCode': _zipCodeController.text.trim(),
+        'username': _usernameController.text.trim(),
+        'createdAt': DateTime.now().toIso8601String(),
+        'role': 'Patient',
+        'emailVerified': false, // ✅ ADD THIS FIELD
+      });
+
+      // Admin notification
+      await FirebaseFirestore.instance.collection('admin_notifications').add({
+        'type': 'new_user',
+        'message': 'New user registered: ${_emailController.text.trim()}',
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+        'relatedUserId': userCredential.user!.uid,
+      });
+
+      // ✅ SHOW VERIFICATION DIALOG
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.mark_email_read, color: Colors.green),
+                SizedBox(width: 10),
+                Text('Verify Your Email'),
+              ],
+            ),
+            content: Text(
+              'A verification email has been sent to ${_emailController.text.trim()}.\n\n'
+              'Please check your inbox and click the verification link to activate your account.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () async {
+                  Navigator.pop(context); // Close dialog
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+                child: const Text('Go to Login'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  try {
+                    await userCredential.user!.sendEmailVerification();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Verification email sent again!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content:
+                            Text('Failed to resend email. Try again later.'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+                child: const Text('Resend Email'),
+              ),
+            ],
+          ),
         );
+      }
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_getReadableError(e)),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('An unexpected error occurred.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }

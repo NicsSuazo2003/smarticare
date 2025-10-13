@@ -29,115 +29,126 @@ class _ActivityLogScreenState extends State<ActivityLogScreen> {
 
   Future<void> _fetchActivities() async {
     setState(() => _loading = true);
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() {
+          _activities = [];
+          _loading = false;
+        });
+        return;
+      }
 
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('audit_logs')
+          .where('userId', isEqualTo: user.uid)
+          .orderBy('timestamp', descending: true)
+          .get();
+
+      print('Fetched ${snapshot.docs.length} logs for userId=${user.uid}');
+
+      final mapped = snapshot.docs.map((doc) {
+        final data = doc.data();
+        final action = data['action'] as String? ?? '';
+        final DateTime ts =
+            (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
+
+        IconData icon = Icons.help_outline;
+        Color color = Colors.grey;
+        String title = action;
+        String subtitle = data['details'] ?? '';
+
+        switch (action) {
+          case 'scan_completed':
+            icon = Icons.camera_alt;
+            color = const Color(0xFFFF6B6B);
+            title = "Eye Scan Completed";
+            break;
+          case 'symptom_assessment_completed':
+            icon = Icons.help;
+            color = Colors.teal;
+            title = "Symptom Assessment";
+            break;
+          case 'appointment_completed':
+            icon = Icons.local_hospital;
+            color = Colors.blue;
+            title = "Doctor's Appointment Completed";
+            break;
+          case 'appointment_cancelled':
+            icon = Icons.local_hospital;
+            color = Colors.red;
+            title = "Doctor's Appointment Cancelled";
+            break;
+          case 'reminder_created':
+            icon = Icons.notification_important;
+            color = Colors.amber;
+            title = "Reminder Created";
+            break;
+          case 'reminder_completed':
+            icon = Icons.notification_important;
+            color = Colors.green;
+            title = "Reminder Completed";
+            break;
+          case 'reminder_deleted':
+            icon = Icons.delete_outline;
+            color = Colors.red;
+            title = "Reminder Deleted";
+            break;
+          case 'profile_updated':
+            icon = Icons.person;
+            color = Colors.purple;
+            title = "Profile Updated";
+            break;
+          case 'password_changed':
+            icon = Icons.lock;
+            color = Colors.deepPurple;
+            title = "Password Changed";
+            break;
+          case 'email_changed':
+            icon = Icons.email;
+            color = Colors.orange;
+            title = "Email Changed";
+            break;
+          case 'account_deleted':
+            icon = Icons.person_off;
+            color = Colors.redAccent;
+            title = "Account Deleted";
+            break;
+          default:
+            title = action.replaceAll('_', ' ').replaceFirstMapped(
+                  RegExp(r'^\w'),
+                  (m) => m.group(0)!.toUpperCase(),
+                );
+        }
+
+        final time =
+            "${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}";
+        final date =
+            "${ts.year.toString().padLeft(4, '0')}-${ts.month.toString().padLeft(2, '0')}-${ts.day.toString().padLeft(2, '0')}";
+
+        return {
+          "icon": icon,
+          "color": color,
+          "title": title,
+          "subtitle": subtitle,
+          "time": time,
+          "date": date,
+        };
+      }).toList();
+
+      setState(() {
+        _activities = mapped;
+        _loading = false;
+      });
+    } catch (e, stack) {
+      print('Error fetching activities: $e');
+      print(stack);
       setState(() {
         _activities = [];
         _loading = false;
       });
-      return;
+      // Optional: Show a snackbar or message to the user here
     }
-
-    final snapshot = await FirebaseFirestore.instance
-        .collection('audit_logs')
-        .where('userId', isEqualTo: user.uid)
-        .orderBy('timestamp', descending: true)
-        .get();
-
-    final mapped = snapshot.docs.map((doc) {
-      final data = doc.data();
-      final action = data['action'] as String? ?? '';
-      final DateTime ts =
-          (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
-
-      IconData icon = Icons.help_outline;
-      Color color = Colors.grey;
-      String title = action;
-      String subtitle = data['details'] ?? '';
-
-      switch (action) {
-        case 'scan_completed':
-          icon = Icons.camera_alt;
-          color = const Color(0xFFFF6B6B);
-          title = "Eye Scan Completed";
-          break;
-        case 'symptom_assessment_completed':
-          icon = Icons.help;
-          color = Colors.teal;
-          title = "Symptom Assessment";
-          break;
-        case 'appointment_completed':
-          icon = Icons.local_hospital;
-          color = Colors.blue;
-          title = "Doctor's Appointment Completed";
-          break;
-        case 'appointment_cancelled':
-          icon = Icons.local_hospital;
-          color = Colors.red;
-          title = "Doctor's Appointment Cancelled";
-          break;
-        case 'reminder_created':
-          icon = Icons.notification_important;
-          color = Colors.amber;
-          title = "Reminder Created";
-          break;
-        case 'reminder_completed':
-          icon = Icons.notification_important;
-          color = Colors.green;
-          title = "Reminder Completed";
-          break;
-        case 'reminder_deleted':
-          icon = Icons.delete_outline;
-          color = Colors.red;
-          title = "Reminder Deleted";
-          break;
-        case 'profile_updated':
-          icon = Icons.person;
-          color = Colors.purple;
-          title = "Profile Updated";
-          break;
-        case 'password_changed':
-          icon = Icons.lock;
-          color = Colors.deepPurple;
-          title = "Password Changed";
-          break;
-        case 'email_changed':
-          icon = Icons.email;
-          color = Colors.orange;
-          title = "Email Changed";
-          break;
-        case 'account_deleted':
-          icon = Icons.person_off;
-          color = Colors.redAccent;
-          title = "Account Deleted";
-          break;
-        default:
-          title = action.replaceAll('_', ' ').replaceFirstMapped(
-                RegExp(r'^\w'),
-                (m) => m.group(0)!.toUpperCase(),
-              );
-      }
-
-      final time =
-          "${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}";
-      final date =
-          "${ts.year.toString().padLeft(4, '0')}-${ts.month.toString().padLeft(2, '0')}-${ts.day.toString().padLeft(2, '0')}";
-
-      return {
-        "icon": icon,
-        "color": color,
-        "title": title,
-        "subtitle": subtitle,
-        "time": time,
-        "date": date,
-      };
-    }).toList();
-
-    setState(() {
-      _activities = mapped;
-      _loading = false;
-    });
   }
 
   void _onNavItemTapped(int index) {

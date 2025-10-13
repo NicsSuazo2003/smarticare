@@ -4,6 +4,7 @@ import 'home_screen.dart';
 import 'progress_screen.dart';
 import 'reminder_screen.dart';
 import 'profile_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ClinicDetailScreen extends StatefulWidget {
   final String clinicId;
@@ -256,13 +257,19 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
                           ),
                           elevation: 2,
                         ),
-                        onPressed: () {
+                        onPressed: () async {
                           final phone =
                               clinic["phone"] ?? clinic["contactPhone"] ?? "";
                           if (phone.isNotEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Calling $phone ...")),
-                            );
+                            final uri = Uri(scheme: 'tel', path: phone);
+                            if (await canLaunchUrl(uri)) {
+                              await launchUrl(uri);
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                    content: Text("Could not launch dialer")),
+                              );
+                            }
                           }
                         },
                       ),

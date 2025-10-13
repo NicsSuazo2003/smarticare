@@ -10,12 +10,13 @@ plugins {
 
 android {
     namespace = "com.example.flutter_application_1"
-    compileSdk = 35
+    compileSdk = 36 
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
+           coreLibraryDesugaringEnabled true
     }
 
     kotlinOptions {
@@ -25,7 +26,7 @@ android {
     defaultConfig {
         applicationId = "com.example.flutter_application_1"
         minSdkVersion = flutter.minSdkVersion
-        targetSdk = 35
+        targetSdk = 36 
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
@@ -35,7 +36,14 @@ android {
             signingConfig = signingConfigs.debug
         }
     }
+    
 }
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    // ... other dependencies ...
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+}
+
 
 flutter {
     source = "../.."

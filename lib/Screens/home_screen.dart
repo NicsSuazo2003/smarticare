@@ -1,5 +1,8 @@
+import 'dart:math';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
@@ -11,6 +14,8 @@ import 'reminder_screen.dart';
 import 'profile_screen.dart';
 import 'activity_log_screen.dart';
 import 'view_history_screen.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shimmer/shimmer.dart';
 import 'full_report_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -28,6 +33,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedNavIndex = 0; // Default to Home tab (index 0)
   late String _formattedDateTime;
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
   String _username = "";
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -49,6 +56,36 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchEyeHealthData();
     _fetchRecentActivities();
     _fetchRecentScans();
+
+    // Initialize flutter_local_notifications
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    final InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+    flutterLocalNotificationsPlugin.initialize(initializationSettings);
+
+    // Listen for foreground FCM messages and show a local notification
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      RemoteNotification? notification = message.notification;
+      AndroidNotification? android = message.notification?.android;
+      if (notification != null && android != null) {
+        flutterLocalNotificationsPlugin.show(
+          notification.hashCode,
+          notification.title,
+          notification.body,
+          NotificationDetails(
+            android: AndroidNotificationDetails(
+              'reminder_channel', // channel id
+              'Reminders', // channel name
+              channelDescription: 'Channel for reminder notifications',
+              importance: Importance.max,
+              priority: Priority.high,
+              icon: '@mipmap/ic_launcher',
+            ),
+          ),
+        );
+      }
+    });
 
     // If we're returning from a scan, force a refresh after a short delay
     // to ensure Firebase has time to update
@@ -495,6 +532,10 @@ class _HomeScreenState extends State<HomeScreen> {
     const Color primaryColor = Color(0xFFFF6B6B);
     const Color secondaryColor = Color(0xFF4A6572);
     final Size size = MediaQuery.of(context).size;
+    double maxWidth = ((MediaQuery.of(context).size.width - 72) / 2);
+    double percent = (_eyeHealthData['leftEye']['score'] ?? 0) / 100.0;
+    double barWidth = maxWidth * percent;
+    barWidth = min(barWidth, maxWidth); // Clamp to available width
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
@@ -812,14 +853,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         child: Row(
                                           children: [
                                             Container(
-                                              width: ((MediaQuery.of(context)
-                                                              .size
-                                                              .width -
-                                                          72) /
-                                                      2) *
-                                                  (_eyeHealthData['leftEye']
-                                                          ['score'] /
-                                                      100),
+                                              width: barWidth,
                                               decoration: BoxDecoration(
                                                 color: _getStatusColor(
                                                     _eyeHealthData['leftEye']
@@ -1375,6 +1409,26 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       bottomNavigationBar: _buildBottomNavigationBar(primaryColor),
+    );
+  }
+
+  Widget _buildLoadingSkeleton() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey[300]!,
+      highlightColor: Colors.grey[100]!,
+      child: Column(
+        children: List.generate(
+          5,
+          (index) => Container(
+            margin: EdgeInsets.only(bottom: 16),
+            height: 100,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
