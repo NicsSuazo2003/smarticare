@@ -4,7 +4,7 @@ import 'home_screen.dart';
 import 'progress_screen.dart';
 import 'reminder_screen.dart';
 import 'profile_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
 
 class ClinicDetailScreen extends StatefulWidget {
   final String clinicId;
@@ -85,6 +85,10 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
             return const Center(child: Text('Clinic not found.'));
           }
           final clinic = snapshot.data!.data() as Map<String, dynamic>;
+          final phone = (clinic["phone"] ?? clinic["contactPhone"] ?? "")
+              .toString()
+              .trim();
+
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -148,7 +152,7 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                // Info Row Card
+                // Info Row Card (distance + hours only — phone moved to Phone card below)
                 Card(
                   elevation: cardElevation,
                   shape: RoundedRectangleBorder(borderRadius: cardRadius),
@@ -156,25 +160,22 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 18.0, vertical: 16),
                     child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        _iconInfo(
-                          icon: Icons.directions_walk,
-                          color: primaryColor,
-                          label: clinic["distance"] ?? "N/A",
+                        Expanded(
+                          child: _iconInfo(
+                            icon: Icons.directions_walk,
+                            color: primaryColor,
+                            label: clinic["distance"] ?? "N/A",
+                          ),
                         ),
-                        _verticalDivider(),
-                        _iconInfo(
-                          icon: Icons.access_time,
-                          color: Colors.orange.shade700,
-                          label: clinic["hours"] ?? "N/A",
-                        ),
-                        _verticalDivider(),
-                        _iconInfo(
-                          icon: Icons.phone,
-                          color: Colors.green.shade700,
-                          label: clinic["phone"] ??
-                              clinic["contactPhone"] ??
-                              "N/A",
+                        // keep a visual separation but don't duplicate phone info here
+                        Expanded(
+                          child: _iconInfo(
+                            icon: Icons.access_time,
+                            color: Colors.orange.shade700,
+                            label: clinic["hours"] ?? "N/A",
+                          ),
                         ),
                       ],
                     ),
@@ -239,42 +240,51 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
                   ),
                 ),
 
-                // Action Buttons
+                // Phone display + copy button (kept separate — this is the canonical phone entry)
                 const SizedBox(height: 22),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.phone),
-                        label: const Text("Call Clinic"),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          textStyle: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 2,
-                        ),
-                        onPressed: () async {
-                          final phone =
-                              clinic["phone"] ?? clinic["contactPhone"] ?? "";
-                          if (phone.isNotEmpty) {
-                            final uri = Uri(scheme: 'tel', path: phone);
-                            if (await canLaunchUrl(uri)) {
-                              await launchUrl(uri);
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                    content: Text("Could not launch dialer")),
-                              );
-                            }
-                          }
-                        },
-                      ),
+                Card(
+                  elevation: cardElevation,
+                  shape: RoundedRectangleBorder(borderRadius: cardRadius),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: primaryColor.withOpacity(0.08),
+                      child: Icon(Icons.phone, color: primaryColor),
                     ),
-                  ],
+                    title: const Text(
+                      "Phone",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: phone.isNotEmpty
+                        ? SelectableText(
+                            phone,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey.shade900,
+                            ),
+                          )
+                        : Text(
+                            "No phone number available",
+                            style: TextStyle(
+                              fontSize: 15,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                    trailing: phone.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.copy),
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: phone));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content:
+                                      Text("Phone number copied to clipboard"),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                          )
+                        : null,
+                  ),
                 ),
               ],
             ),

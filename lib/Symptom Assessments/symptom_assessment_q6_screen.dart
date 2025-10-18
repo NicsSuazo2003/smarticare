@@ -141,6 +141,7 @@ class _SymptomAssessmentQ6ScreenState extends State<SymptomAssessmentQ6Screen> {
                     const SizedBox(height: 24),
 
                     // Image
+                    // Image container (overlay icons removed)
                     Container(
                       height: 180,
                       width: double.infinity,
@@ -148,27 +149,8 @@ class _SymptomAssessmentQ6ScreenState extends State<SymptomAssessmentQ6Screen> {
                         color: Colors.grey.shade200,
                         borderRadius: BorderRadius.circular(16),
                         image: const DecorationImage(
-                          image: AssetImage('assets/images/double_vision.png'),
+                          image: AssetImage('assets/images/double_vision.jpg'),
                           fit: BoxFit.cover,
-                        ),
-                      ),
-                      // Use this if you don't have the image
-                      child: Center(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.remove_red_eye,
-                              size: 50,
-                              color: Colors.grey.shade700,
-                            ),
-                            const SizedBox(width: 10),
-                            Icon(
-                              Icons.remove_red_eye,
-                              size: 50,
-                              color: Colors.grey.shade700.withOpacity(0.6),
-                            ),
-                          ],
                         ),
                       ),
                     ),
@@ -261,9 +243,9 @@ class _SymptomAssessmentQ6ScreenState extends State<SymptomAssessmentQ6Screen> {
                           ),
                           SizedBox(width: 8),
                           Text(
-                            'Previous',
+                            'Back',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 10,
                               fontWeight: FontWeight.w500,
                             ),
                           ),

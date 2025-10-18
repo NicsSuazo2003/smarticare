@@ -4,6 +4,7 @@ import 'package:flutter_application_1/Screens/complete_profile_screen.dart';
 import 'package:flutter_application_1/Screens/forgot_password_screen.dart';
 import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
 import 'package:flutter_application_1/Screens/symptom_assessment_screen.dart';
+import 'package:flutter_application_1/Screens/terms_of_service_screen.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_svg/svg.dart';
 import 'app_permission_screen.dart';
@@ -14,6 +15,8 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import 'privacy_policy_screen.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -23,13 +26,13 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  // ignore: unused_field
   String _email = '';
-  // ignore: unused_field
   String _password = '';
   bool _obscureText = true;
   bool _isLoading = false;
   bool _rememberMe = false;
+
+  final _emailController = TextEditingController();
 
   Future<void> saveTokenToFirestore(String uid) async {
     final token = await FirebaseMessaging.instance.getToken();
@@ -37,6 +40,69 @@ class _LoginScreenState extends State<LoginScreen> {
       await FirebaseFirestore.instance.collection('users').doc(uid).update({
         'fcmToken': token,
       });
+    }
+  }
+
+  void _showSnackBar(String message, {Color? color}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: color ?? Colors.red,
+    ));
+  }
+
+  // Add this function to check and reactivate user status
+  Future<bool> _checkAndReactivateUser(String userId) async {
+    try {
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (userDoc.exists) {
+        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
+        String status = userData['status'] ?? 'active';
+
+        if (status == 'inactive') {
+          // Reactivate the account
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .update({
+            'status': 'active',
+            'reactivatedAt': FieldValue.serverTimestamp(),
+          });
+
+          // Log the reactivation
+          await AuditLogService.logAction(
+            action: 'account_reactivated',
+            details: 'User reactivated their account by logging in.',
+          );
+
+          // Notify admin
+          await FirebaseFirestore.instance
+              .collection('admin_notifications')
+              .add({
+            'type': 'account_reactivated',
+            'message':
+                'User ${userData["firstName"]} ${userData["lastName"]} reactivated their account.',
+            'createdAt': FieldValue.serverTimestamp(),
+            'read': false,
+            'relatedUserId': userId,
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Welcome back! Your account has been reactivated.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          return true;
+        }
+      }
+      return false;
+    } catch (e) {
+      print('Error checking user status: $e');
+      return false;
     }
   }
 
@@ -96,9 +162,13 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           );
+          setState(() => _isLoading = false);
           return;
         }
         LatestScanCache.clearCache();
+
+        // ✅ CHECK AND REACTIVATE USER STATUS
+        await _checkAndReactivateUser(userCredential.user!.uid);
 
         await AuditLogService.logAction(
           action: 'login',
@@ -112,10 +182,38 @@ class _LoginScreenState extends State<LoginScreen> {
           await _afterLoginFlow(context, user.uid);
         }
       } on FirebaseAuthException catch (e) {
-        // ... existing error handling
+        // Show red SnackBar for wrong credentials or user not found, etc.
+        String message = "Invalid email or password";
+        // You can further customize by checking e.code if needed
+        _showSnackBar(message, color: Colors.red);
+      } catch (_) {
+        _showSnackBar("Invalid email or password", color: Colors.red);
       } finally {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _sendPasswordResetEmail() async {
+    String email = _emailController.text.trim();
+    if (email.isEmpty) {
+      _showSnackBar("Please enter your email address.", color: Colors.red);
+      return;
+    }
+    setState(() => _isLoading = true);
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      _showSnackBar("Password reset email sent!", color: Colors.green);
+    } on FirebaseAuthException catch (e) {
+      String message = "An error occurred.";
+      if (e.code == 'user-not-found') {
+        message = "No user found for that email.";
+      } else if (e.code == 'invalid-email') {
+        message = "Invalid email address.";
+      }
+      _showSnackBar(message, color: Colors.red);
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -208,19 +306,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _continueAsGuest() {
-    // Set guest mode in provider
-    Provider.of<UserSessionProvider>(context, listen: false).setGuest(true);
-
-    // Go directly to EyeScanScreen (recommended for Scan Only Guest Mode)
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) =>
-            EyeScanScreen(symptomScore: 0.0), // or 0.5 if you prefer
-      ),
-    );
-  }
+  // Removed _continueAsGuest
 
   Future<void> _signInWithGoogle() async {
     setState(() => _isLoading = true);
@@ -239,6 +325,9 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       final userCredential =
           await FirebaseAuth.instance.signInWithCredential(credential);
+
+      // ✅ CHECK AND REACTIVATE USER STATUS
+      await _checkAndReactivateUser(userCredential.user!.uid);
 
       // After signing in, check Firestore
       final userDoc = await FirebaseFirestore.instance
@@ -297,12 +386,34 @@ class _LoginScreenState extends State<LoginScreen> {
       if (user == null) return;
       LatestScanCache.clearCache();
 
+      // ✅ CHECK AND REACTIVATE USER STATUS
+      await _checkAndReactivateUser(user.uid);
+
       // Check Firestore profile
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
+
       if (!doc.exists) {
+        // ✅ NEW USER: Show Terms and Conditions Dialog
+        final bool agreedToTerms = await _showTermsDialog(context);
+
+        if (!agreedToTerms) {
+          // User declined terms, sign them out and show message
+          await FirebaseAuth.instance.signOut();
+          await GoogleSignIn().signOut();
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'You must agree to the Terms and Conditions to create an account'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
         // Parse first/last name
         String firstName = "";
         String lastName = "";
@@ -311,6 +422,7 @@ class _LoginScreenState extends State<LoginScreen> {
           firstName = parts.isNotEmpty ? parts.first : "";
           lastName = parts.length > 1 ? parts.sublist(1).join(" ") : "";
         }
+
         // Navigate to complete profile screen
         Navigator.pushReplacement(
           context,
@@ -332,6 +444,228 @@ class _LoginScreenState extends State<LoginScreen> {
         SnackBar(content: Text('Google sign-in failed: $e')),
       );
     }
+  }
+
+  Future<bool> _showTermsDialog(BuildContext context) async {
+    bool agreed = false;
+    bool scrolledToEnd = false;
+    const double _endTolerance = 20.0; // px tolerance from bottom
+
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => StatefulBuilder(builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Terms and Conditions'),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: MediaQuery.of(context).size.height * 0.6,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Scrollable terms content wrapped in a NotificationListener
+                    Expanded(
+                      child: NotificationListener<ScrollNotification>(
+                        onNotification: (scrollNotification) {
+                          final metrics = scrollNotification.metrics;
+                          // If content is non-scrollable (maxScrollExtent == 0) treat as already at end
+                          final atEnd = metrics.maxScrollExtent <= 0 ||
+                              metrics.pixels >=
+                                  metrics.maxScrollExtent - _endTolerance;
+                          if (atEnd && !scrolledToEnd) {
+                            setState(() {
+                              scrolledToEnd = true;
+                            });
+                          }
+                          return false;
+                        },
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.only(right: 8.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                'Welcome to SmartiCare! By using our eye screening and health platform, you agree to these Terms of Service (“Terms”). Please read them carefully.',
+                                style: TextStyle(fontSize: 14, height: 1.6),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                '1. Use of the App',
+                                style: TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                '• The App provides cataract risk assessments and eye health monitoring tools for informational and educational purposes.\n'
+                                '• The App is not a substitute for professional medical diagnosis, advice, or treatment. Always consult a qualified healthcare provider for health concerns.',
+                                style: TextStyle(fontSize: 14, height: 1.6),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                '2. User Account and Responsibilities',
+                                style: TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                '• You must provide accurate and complete information when creating an account.\n'
+                                '• You are responsible for maintaining the confidentiality of your account credentials.\n'
+                                '• You agree not to misuse the App or submit false or harmful information.',
+                                style: TextStyle(fontSize: 14, height: 1.6),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                '3. Health Data and Consent',
+                                style: TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                '• By using the App, you consent to the collection, processing, and storage of your health and personal data as described in our Privacy Policy.\n'
+                                '• You grant us permission to use de-identified data for research and service improvement.',
+                                style: TextStyle(fontSize: 14, height: 1.6),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                '4. Intellectual Property',
+                                style: TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                '• All content, algorithms, and materials within the App are owned or licensed by SmartiCare and are protected by law.\n'
+                                '• You may not copy, reproduce, or distribute any part of the App without written permission.',
+                                style: TextStyle(fontSize: 14, height: 1.6),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                '5. Limitation of Liability',
+                                style: TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                '• The App provides preliminary assessments and recommendations only. We are not liable for any decisions you make based on app results.\n'
+                                '• We make no guarantees regarding accuracy or completeness of assessments.\n'
+                                '• To the fullest extent permitted by law, SmartiCare and its affiliates are not responsible for any damages or losses arising from your use of the App.',
+                                style: TextStyle(fontSize: 14, height: 1.6),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                '6. Account Termination',
+                                style: TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                '• We reserve the right to suspend or terminate your account for violation of these Terms or misuse of the App.\n'
+                                '• You may delete your account at any time in the app.',
+                                style: TextStyle(fontSize: 14, height: 1.6),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                '7. Modifications and Updates',
+                                style: TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                '• We may update these Terms from time to time. Significant changes will be notified via the app or by email. Continued use constitutes acceptance.',
+                                style: TextStyle(fontSize: 14, height: 1.6),
+                              ),
+                              SizedBox(height: 12),
+                              Text(
+                                '8. Contact Us',
+                                style: TextStyle(
+                                    fontSize: 15, fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 8),
+                              Text(
+                                'For any questions or concerns about these Terms, please contact: support@smarticare.com',
+                                style: TextStyle(fontSize: 14, height: 1.6),
+                              ),
+                              SizedBox(height: 8),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Checkbox row; disable the checkbox until user has scrolled to end
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Checkbox(
+                          value: agreed,
+                          onChanged: scrolledToEnd
+                              ? (value) {
+                                  setState(() {
+                                    agreed = value ?? false;
+                                  });
+                                }
+                              : null, // disabled until scrolled
+                          activeColor: const Color(0xFFFF6B6B),
+                        ),
+                        Expanded(
+                          child: Text(
+                            scrolledToEnd
+                                ? 'I have read and agree to the Terms of Service and Privacy Policy'
+                                : 'Scroll to the bottom to enable agreement',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: scrolledToEnd
+                                  ? Colors.grey.shade800
+                                  : Colors.grey.shade500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Optional small link to open the full screen Terms page
+                    // Links to read full Terms and Privacy Policy
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (_) => const PrivacyPolicyScreen()),
+                            );
+                          },
+                          child: const Text('View Privacy Policy'),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (_) => const TermsOfServiceScreen()),
+                            );
+                          },
+                          child: const Text('View Full Terms'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: agreed ? () => Navigator.pop(context, true) : null,
+                  child: const Text('Continue'),
+                ),
+              ],
+            );
+          }),
+        ) ??
+        false;
   }
 
   @override
@@ -372,10 +706,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           color: primaryColor.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: Icon(
-                          Icons.remove_red_eye,
-                          size: 40,
-                          color: primaryColor,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.asset(
+                            'assets/images/icon.png',
+                            fit: BoxFit.cover,
+                            width: 80,
+                            height: 80,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -415,8 +753,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         // Email field
-                        // Email field
                         TextFormField(
+                          controller: _emailController,
                           decoration: InputDecoration(
                             hintText: 'Enter your email',
                             prefixIcon: Icon(Icons.email_outlined,
@@ -458,7 +796,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                         ),
                         const SizedBox(height: 20),
-// Password label
+                        // Password label
                         Padding(
                           padding: const EdgeInsets.only(left: 4, bottom: 8),
                           child: Text(
@@ -469,7 +807,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
-// Password field
+                        // Password field
                         TextFormField(
                           decoration: InputDecoration(
                             hintText: 'Enter your password',
@@ -520,20 +858,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             return null;
                           },
                         ),
-
-// Remember me checkbox and Forgot password
+                        // Forgot password
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             TextButton(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const ForgotPasswordScreen()),
-                                );
-                              },
+                              onPressed:
+                                  _isLoading ? null : _sendPasswordResetEmail,
                               style: TextButton.styleFrom(
                                 minimumSize: Size.zero,
                                 padding: const EdgeInsets.symmetric(
@@ -603,30 +934,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Continue as guest
-                  SizedBox(
-                    width: double.infinity,
-                    height: 58,
-                    child: OutlinedButton(
-                      onPressed: _continueAsGuest,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: primaryColor,
-                        side: BorderSide(color: primaryColor, width: 1.5),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: const Text(
-                        'Continue as Guest',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
+                  // CONTINUE AS GUEST BUTTON REMOVED
+                  // const Spacer(),
                   // Register option
+                  const Spacer(),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

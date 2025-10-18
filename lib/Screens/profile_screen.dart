@@ -2,15 +2,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
+import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'home_screen.dart';
 import 'progress_screen.dart';
 import 'reminder_screen.dart';
 import 'symptom_assessment_screen.dart';
-import 'contact_support_screen.dart'; // Import for ContactSupportScreen
+
 import 'faqs_screen.dart'; // Import for FAQsScreen
 import 'privacy_policy_screen.dart'; // Import for PrivacyPolicyScreen
 import 'terms_of_service_screen.dart'; // Added import for TermsOfServiceScreen
-import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // Import FirebaseAuth
 import '../screens/login.dart'; // Import the login screen
 
@@ -318,14 +319,17 @@ void _deleteAccount(BuildContext context) {
 void _logout(BuildContext context) async {
   try {
     LatestScanCache.clearCache();
-    await FirebaseAuth.instance.signOut(); // Sign out the user
-    // Navigate to the login screen
+    await FirebaseAuth.instance.signOut();
+
+    // ✅ ADD THIS: Reset hasSeenWelcome on logout
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hasSeenWelcome', false);
+
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
   } catch (e) {
-    // Handle logout error (optional)
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Logout failed: $e')),
     );
@@ -380,17 +384,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
     switch (index) {
       case 0:
-        Navigator.pushAndRemoveUntil(
+        Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
-          (route) => false,
         );
         break;
       case 1:
-        Navigator.pushAndRemoveUntil(
+        Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const ProgressScreen()),
-          (route) => false,
         );
         break;
       case 2:
@@ -406,10 +408,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
         break;
       case 3:
-        Navigator.pushAndRemoveUntil(
+        Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const ReminderScreen()),
-          (route) => false,
         );
         break;
       case 4:
@@ -532,24 +533,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: dobController,
-                        decoration: const InputDecoration(
-                          labelText: 'Date of Birth (YYYY-MM-DD)*',
-                          border: OutlineInputBorder(),
-                        ),
-                        keyboardType: TextInputType.datetime,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your date of birth';
+                      // Replace the existing DOB TextFormField with this read-only picker field:
+                      GestureDetector(
+                        onTap: () async {
+                          // parse existing date in controller if available, otherwise use a sensible default
+                          DateTime initialDate;
+                          try {
+                            initialDate = DateFormat('yyyy-MM-dd')
+                                .parse(dobController.text);
+                          } catch (_) {
+                            initialDate = DateTime.now()
+                                .subtract(const Duration(days: 365 * 25));
                           }
-                          // Basic date format validation
-                          final dateRegex = RegExp(r'^\d{4}-\d{2}-\d{2}$');
-                          if (!dateRegex.hasMatch(value)) {
-                            return 'Please use YYYY-MM-DD format';
+
+                          final DateTime firstDate = DateTime(1900);
+                          final DateTime lastDate = DateTime.now();
+
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: initialDate,
+                            firstDate: firstDate,
+                            lastDate: lastDate,
+                            builder: (context, child) {
+                              // Optional: keep the dialog themed similarly
+                              return Theme(
+                                data: Theme.of(context).copyWith(
+                                  colorScheme: ColorScheme.light(
+                                    primary:
+                                        primaryColor, // header background color
+                                    onPrimary:
+                                        Colors.white, // header text color
+                                    onSurface: Colors.black, // body text color
+                                  ),
+                                  textButtonTheme: TextButtonThemeData(
+                                    style: TextButton.styleFrom(
+                                        foregroundColor: primaryColor),
+                                  ),
+                                ),
+                                child: child!,
+                              );
+                            },
+                          );
+
+                          if (picked != null) {
+                            final formatted =
+                                DateFormat('yyyy-MM-dd').format(picked);
+                            setState(() {
+                              dobController.text = formatted;
+                            });
                           }
-                          return null;
                         },
+                        child: AbsorbPointer(
+                          child: TextFormField(
+                            controller: dobController,
+                            readOnly: true,
+                            decoration: const InputDecoration(
+                              labelText: 'Date of Birth (YYYY-MM-DD)*',
+                              border: OutlineInputBorder(),
+                              suffixIcon: Icon(Icons.calendar_today),
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter your date of birth';
+                              }
+                              // keep basic YYYY-MM-DD validation
+                              final dateRegex = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+                              if (!dateRegex.hasMatch(value)) {
+                                return 'Please use YYYY-MM-DD format';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 24),
                       // Section 2: Contact Information
@@ -714,8 +769,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
                   ),
-                  child: const Text('SAVE'),
+                  child: const Text(
+                    'SAVE',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             );
@@ -1199,39 +1262,143 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: _showChangePasswordDialog,
           ),
           _buildSettingTile(
-            icon: Icons.delete_outline,
-            title: 'Delete Account',
+            icon: Icons.pause_circle_outline,
+            title: 'Deactivate Account',
             isDestructive: true,
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) {
-                  return AlertDialog(
-                    title: const Text('Delete Account?'),
-                    content: const Text(
-                      'This action cannot be undone. All your data will be permanently deleted.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('CANCEL'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        style:
-                            TextButton.styleFrom(foregroundColor: Colors.red),
-                        child: const Text('DELETE'),
-                      ),
-                    ],
-                  );
-                },
-              );
-            },
+            onTap: () => _deactivateAccount(context),
             isLast: true,
           ),
         ],
       ),
     );
+  }
+
+  void _deactivateAccount(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Deactivate Account'),
+          content: const Text(
+            'Your account will be deactivated. You will be logged out immediately. All your data will be preserved.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('CANCEL'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context); // Close the dialog first
+                await _performDeactivation(context); // Ensure await is used
+              },
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('DEACTIVATE'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // Replace the existing _performDeactivation(...) in profile_screen.dart with this updated version.
+
+  Future<void> _performDeactivation(BuildContext context) async {
+    // Show a blocking loader on the ROOT navigator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final uid = _currentUser?.uid;
+    if (uid == null) {
+      // Close loader and show error
+      try {
+        Navigator.of(context, rootNavigator: true).pop();
+      } catch (_) {}
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No user is currently logged in.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    bool success = false;
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'status': 'inactive',
+        'deactivatedAt': FieldValue.serverTimestamp(),
+      });
+
+      await AuditLogService.logAction(
+        action: 'account_deactivated',
+        details: 'User deactivated their account.',
+      );
+
+      await FirebaseFirestore.instance.collection('admin_notifications').add({
+        'type': 'account_deactivated',
+        'message': 'User deactivated their account.',
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+        'relatedUserId': uid,
+      });
+
+      success = true;
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to deactivate account: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      // Try to close the loader dialog unconditionally. Wrap in try/catch to avoid exceptions.
+      try {
+        Navigator.of(context, rootNavigator: true).pop();
+      } catch (_) {}
+    }
+
+    if (!success) return;
+
+    try {
+      await FirebaseAuth.instance.signOut(); // ✅ This logs out the user
+    } catch (e) {
+      // Even if sign-out fails, continue to avoid trapping the user
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sign out error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+
+    if (!context.mounted) return;
+
+    // Navigate to the Login screen and clear navigation stack
+    try {
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Account deactivated successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      // If navigation fails for some reason, make sure app isn't left with a stuck loader
+      try {
+        Navigator.of(context, rootNavigator: true).pop();
+      } catch (_) {}
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Navigation error after deactivation: $e')),
+      );
+    }
   }
 
   Widget _buildSupportSection() {
@@ -1271,19 +1438,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ),
           const Divider(height: 1),
-          _buildSettingTile(
-            icon: Icons.chat_bubble_outline,
-            title: 'Contact Support',
-            onTap: () {
-              // Navigate to ContactSupportScreen when Contact Support is tapped
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ContactSupportScreen(),
-                ),
-              );
-            },
-          ),
           _buildSettingTile(
             icon: Icons.help_outline,
             title: 'FAQs',

@@ -25,8 +25,9 @@ class _ProgressScreenState extends State<ProgressScreen> {
   bool _isLoadingMore = false;
   bool _hasMore = true;
   List<Map<String, dynamic>> progressData = [];
-  String _formattedDateTime = "";
-  String _username = "User";
+  String? _formattedDateTime;
+  String? _username;
+
   // At the start of _ProgressScreenState
 
   @override
@@ -419,46 +420,50 @@ class _ProgressScreenState extends State<ProgressScreen> {
   }
 
   void _onNavItemTapped(int index) {
+    // ✅ Special handling for Eye Scan - always allow it to open
+    if (index == 2) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SymptomAssessmentScreen(
+            onStart: () {
+              Navigator.pop(context);
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
+    // ✅ For other tabs, check if already selected
     if (_selectedNavIndex == index) {
       return;
     }
+
     setState(() {
       _selectedNavIndex = index;
     });
+
     switch (index) {
       case 0: // Home
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const HomeScreen()),
-          (route) => false,
-        );
-        break;
-      case 1: // Progress (already here)
-        break;
-      case 2: // Eye Scan - Changed to navigate to SymptomAssessmentScreen
         Navigator.push(
           context,
-          MaterialPageRoute(
-            builder: (context) => SymptomAssessmentScreen(
-              onStart: () {
-                Navigator.pop(context);
-              },
-            ),
-          ),
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
         break;
+      case 1: // Progress
+        // Already on progress screen
+        break;
       case 3: // Reminders
-        Navigator.pushAndRemoveUntil(
+        Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const ReminderScreen()),
-          (route) => false,
         );
         break;
       case 4: // Profile
-        Navigator.pushAndRemoveUntil(
+        Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const ProfileScreen()),
-          (route) => false,
         );
         break;
     }
@@ -469,30 +474,66 @@ class _ProgressScreenState extends State<ProgressScreen> {
     const Color primaryColor = Color(0xFFFF6B6B);
 
     // Extract data for chart
+    // Extract data for chart
+    // Replace the entire chart data extraction section in your build method with this:
+
+// Extract data for chart
     List<int> rightEyeScores = [];
     List<int> leftEyeScores = [];
     List<String> labels = [];
 
     if (progressData.isNotEmpty) {
-      final Set<String> uniqueDates = {};
+      // Sort by date ascending
       final sortedData = List<Map<String, dynamic>>.from(progressData)
         ..sort(
             (a, b) => (a["date"] as DateTime).compareTo(b["date"] as DateTime));
+
+      // Take only the last 6 scans for the chart
       final limitedData = sortedData.length > 6
           ? sortedData.sublist(sortedData.length - 6)
           : sortedData;
-      final rightEyeData =
-          limitedData.where((scan) => scan["eye"] == "Right Eye").toList();
-      final leftEyeData =
-          limitedData.where((scan) => scan["eye"] == "Left Eye").toList();
-      rightEyeScores = rightEyeData.map((e) => e["score"] as int).toList();
-      leftEyeScores = leftEyeData.map((e) => e["score"] as int).toList();
-      final allDates = limitedData
-          .map((e) => e["date"] as DateTime)
-          .toSet()
-          .toList()
-        ..sort();
-      labels = allDates.map((date) => DateFormat.MMMd().format(date)).toList();
+
+      // Get unique dates for labels
+      final uniqueDates = <DateTime>{};
+      final dateScanMap = <DateTime, Map<String, int>>{};
+
+      // Organize data by date and eye - FIXED VERSION
+      for (var scan in limitedData) {
+        final date = (scan["date"] as DateTime).toLocal();
+        final normalizedDate = DateTime(date.year, date.month, date.day);
+        final eye = (scan["eye"] as String).toLowerCase();
+        final score = scan["score"] as int;
+
+        uniqueDates.add(normalizedDate);
+
+        // Initialize if not exists, but don't overwrite existing data
+        dateScanMap.putIfAbsent(normalizedDate, () => <String, int>{});
+
+        // Store both eyes without overwriting
+        if (eye.contains("right")) {
+          dateScanMap[normalizedDate]!["right"] = score;
+        } else if (eye.contains("left")) {
+          dateScanMap[normalizedDate]!["left"] = score;
+        }
+      }
+
+      // Sort dates and create labels - FIXED: Define sortedDates properly
+      final sortedDatesList = uniqueDates.toList()..sort();
+      labels = sortedDatesList
+          .map((date) => DateFormat.MMMd().format(date))
+          .toList();
+
+      // Build score arrays aligned with dates
+      for (var date in sortedDatesList) {
+        final scores = dateScanMap[date];
+        rightEyeScores.add(scores?["right"] ?? 0);
+        leftEyeScores.add(scores?["left"] ?? 0);
+      }
+
+      // Debug print to verify data
+      print("Chart Data - Labels: $labels");
+      print("Chart Data - Right Eye: $rightEyeScores");
+      print("Chart Data - Left Eye: $leftEyeScores");
     }
 
     return Scaffold(
@@ -525,27 +566,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
             icon: const Icon(Icons.refresh, color: Colors.black),
             onPressed: _fetchProgressData,
           ),
-          GestureDetector(
-            onTap: () {
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfileScreen()),
-                (route) => false,
-              );
-            },
-            child: Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: CircleAvatar(
-                radius: 20,
-                backgroundColor: primaryColor.withOpacity(0.2),
-                child: const Icon(
-                  Icons.person,
-                  color: Color(0xFFFF6B6B),
-                  size: 24,
-                ),
-              ),
-            ),
-          ),
         ],
       ),
       body: _isLoading
@@ -555,9 +575,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
           : ListView(
               padding: const EdgeInsets.all(20),
               children: [
-                // User and date info
-
-                // ---- CHART SECTION (TEXTS OUTSIDE CARD) ----
                 Row(
                   children: [
                     const Text(
@@ -567,8 +584,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     ),
                     const SizedBox(width: 8),
                     Tooltip(
-                      message:
-                          'Shows your eye health scores over time for both eyes. Higher is healthier.',
+                      message: 'Shows your eye scan results over time. '
+                          'The score represents AI confidence in the analysis, not direct health status.',
                       child: Icon(Icons.info_outline,
                           color: Colors.blueGrey, size: 20),
                     ),
@@ -576,18 +593,30 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Track your eye health scans over time. Higher score means healthier eye.',
+                  'Track your eye scan history and AI analysis confidence levels.',
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  'Score: 80–100 Healthy, below 80: See recommendations',
-                  style: TextStyle(
-                    color: Colors.blueGrey.shade600,
-                    fontSize: 12,
-                    fontStyle: FontStyle.italic,
-                    fontWeight: FontWeight.w500,
-                  ),
+                Row(
+                  children: [
+                    Text(
+                      'Score: AI confidence level (0-100%)',
+                      style: TextStyle(
+                        color: Colors.blueGrey.shade600,
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message:
+                          'Higher percentage means the AI is more confident in its analysis. '
+                          'Focus on the Normal/Immature classification for health status.',
+                      child: Icon(Icons.info_outline,
+                          color: Colors.blueGrey, size: 16),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Row(

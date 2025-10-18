@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'personal_screen.dart';
-import 'home_screen.dart'; // Add import for HomeScreen
 
 class EarlyDetectionScreen extends StatefulWidget {
   final VoidCallback onSkip;
@@ -54,26 +54,46 @@ class _EarlyDetectionScreenState extends State<EarlyDetectionScreen>
     super.dispose();
   }
 
-  // Method to navigate to the personal screen
+  // Go to PersonalScreen; PersonalScreen will navigate with its own context
   void _navigateToPersonalScreen() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PersonalScreen(
-          onSkip: () => _navigateToHomeScreen(),
-          onNext: () {}, // Pass the same home screen navigation
+        builder: (_) => PersonalScreen(
+          onSkip: (ctx) async {
+            // mark onboarding seen
+            widget.onSkip();
+            // then route based on auth using the PersonalScreen context
+            final user = FirebaseAuth.instance.currentUser;
+            Navigator.pushNamedAndRemoveUntil(
+              ctx,
+              user == null ? '/login' : '/home',
+              (route) => false,
+            );
+          },
+          onNext: (ctx) async {
+            widget.onSkip();
+            final user = FirebaseAuth.instance.currentUser;
+            Navigator.pushNamedAndRemoveUntil(
+              ctx,
+              user == null ? '/login' : '/home',
+              (route) => false,
+            );
+          },
         ),
       ),
     );
   }
 
-  // Method to navigate directly to the home screen
-  void _navigateToHomeScreen() {
-    Navigator.pushReplacement(
+  // Top-right Skip: complete onboarding and route immediately
+  Future<void> _completeOnboardingAndRoute() async {
+    widget.onSkip();
+    final user = FirebaseAuth.instance.currentUser;
+    if (!mounted) return;
+    Navigator.pushNamedAndRemoveUntil(
       context,
-      MaterialPageRoute(
-        builder: (context) => const HomeScreen(),
-      ),
+      user == null ? '/login' : '/home',
+      (route) => false,
     );
   }
 
@@ -100,12 +120,10 @@ class _EarlyDetectionScreenState extends State<EarlyDetectionScreen>
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: Column(
               children: [
-                // Skip button at top right - Updated to navigate directly to HomeScreen
                 Align(
                   alignment: Alignment.topRight,
                   child: TextButton(
-                    onPressed:
-                        _navigateToHomeScreen, // Use new direct navigation method
+                    onPressed: _completeOnboardingAndRoute,
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.grey.shade700,
                     ),
@@ -118,13 +136,11 @@ class _EarlyDetectionScreenState extends State<EarlyDetectionScreen>
                     ),
                   ),
                 ),
-
-                // Main content with animation
+                // ... rest of UI unchanged ...
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Animated icon
                       FadeTransition(
                         opacity: _fadeAnimation,
                         child: SlideTransition(
@@ -167,10 +183,7 @@ class _EarlyDetectionScreenState extends State<EarlyDetectionScreen>
                           ),
                         ),
                       ),
-
                       SizedBox(height: size.height * 0.08),
-
-                      // Heading with animation
                       FadeTransition(
                         opacity: _fadeAnimation,
                         child: SlideTransition(
@@ -185,10 +198,7 @@ class _EarlyDetectionScreenState extends State<EarlyDetectionScreen>
                           ),
                         ),
                       ),
-
                       SizedBox(height: size.height * 0.03),
-
-                      // Description with animation
                       FadeTransition(
                         opacity: _fadeAnimation,
                         child: SlideTransition(
@@ -204,8 +214,6 @@ class _EarlyDetectionScreenState extends State<EarlyDetectionScreen>
                           ),
                         ),
                       ),
-
-                      // Progress indicator
                       SizedBox(height: size.height * 0.08),
                       FadeTransition(
                         opacity: _fadeAnimation,
@@ -244,8 +252,6 @@ class _EarlyDetectionScreenState extends State<EarlyDetectionScreen>
                     ],
                   ),
                 ),
-
-                // Next button at bottom - Updated to navigate to the PersonalScreen
                 Padding(
                   padding: const EdgeInsets.only(bottom: 30),
                   child: SizedBox(

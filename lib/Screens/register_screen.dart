@@ -7,6 +7,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'privacy_policy_screen.dart';
+import 'terms_of_service_screen.dart';
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -89,22 +92,66 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void _registerUser() async {
-    if (!_formKey.currentState!.validate()) return;
+    // ✅ Validate form fields
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in all required fields correctly'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // ✅ Check gender selection
+    if (_selectedGender == 'Select Gender') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select your gender'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // ✅ Check date of birth
+    if (_selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select your date of birth'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // ✅ Check terms agreement (double-check)
+    if (!_agreeToTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('You must agree to the Terms and Conditions to register'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
 
     setState(() => _isLoading = true);
 
     try {
-      // Create user
+      // ✅ Create Firebase Auth user
       UserCredential userCredential =
           await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      // ✅ SEND VERIFICATION EMAIL
+      // ✅ Send verification email
       await userCredential.user!.sendEmailVerification();
 
-      // Save user data to Firestore
+      // ✅ Save user data to Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
@@ -113,30 +160,39 @@ class _RegisterScreenState extends State<RegisterScreen> {
         'middleName': _middleNameController.text.trim(),
         'lastName': _lastNameController.text.trim(),
         'gender': _selectedGender,
-        'birthDate': _selectedDate != null
-            ? DateFormat('yyyy-MM-dd').format(_selectedDate!)
-            : null,
+        'birthDate': DateFormat('yyyy-MM-dd').format(_selectedDate!),
         'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
         'address': _addressController.text.trim(),
         'city': _cityController.text.trim(),
         'zipCode': _zipCodeController.text.trim(),
         'username': _usernameController.text.trim(),
-        'createdAt': DateTime.now().toIso8601String(),
+        'createdAt': '2025-10-14T11:57:20Z', // Current UTC timestamp
         'role': 'Patient',
-        'emailVerified': false, // ✅ ADD THIS FIELD
+        'emailVerified': false,
+        'status': 'active',
+        'agreedToTerms': true, // ✅ Log that user agreed to terms
+        'agreedToTermsAt': FieldValue.serverTimestamp(),
       });
 
-      // Admin notification
+      // ✅ Log audit action
+      await AuditLogService.logAction(
+        action: 'user_registered',
+        details:
+            'New user registered: ${_emailController.text.trim()}, Username: ${_usernameController.text.trim()}',
+      );
+
+      // ✅ Create admin notification
       await FirebaseFirestore.instance.collection('admin_notifications').add({
         'type': 'new_user',
-        'message': 'New user registered: ${_emailController.text.trim()}',
+        'message':
+            'New user registered: ${_firstNameController.text.trim()} ${_lastNameController.text.trim()} (${_emailController.text.trim()})',
         'createdAt': FieldValue.serverTimestamp(),
         'read': false,
         'relatedUserId': userCredential.user!.uid,
       });
 
-      // ✅ SHOW VERIFICATION DIALOG
+      // ✅ Show verification dialog
       if (mounted) {
         showDialog(
           context: context,
@@ -144,24 +200,80 @@ class _RegisterScreenState extends State<RegisterScreen> {
           builder: (context) => AlertDialog(
             title: const Row(
               children: [
-                Icon(Icons.mark_email_read, color: Colors.green),
-                SizedBox(width: 10),
-                Text('Verify Your Email'),
+                Icon(Icons.mark_email_read, color: Colors.green, size: 28),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Verify Your Email',
+                    style: TextStyle(fontSize: 20),
+                  ),
+                ),
               ],
             ),
-            content: Text(
-              'A verification email has been sent to ${_emailController.text.trim()}.\n\n'
-              'Please check your inbox and click the verification link to activate your account.',
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'A verification email has been sent to:',
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.email, color: Colors.blue.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _emailController.text.trim(),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.shade200),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.info_outline,
+                          color: Colors.amber.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Please check your inbox and click the verification link to activate your account before logging in.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.amber.shade900,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
             actions: [
               TextButton(
-                onPressed: () async {
-                  Navigator.pop(context); // Close dialog
-                  Navigator.pushReplacementNamed(context, '/login');
-                },
-                child: const Text('Go to Login'),
-              ),
-              ElevatedButton(
                 onPressed: () async {
                   try {
                     await userCredential.user!.sendEmailVerification();
@@ -173,9 +285,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     );
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content:
-                            Text('Failed to resend email. Try again later.'),
+                      SnackBar(
+                        content: Text('Failed to resend: ${e.toString()}'),
                         backgroundColor: Colors.red,
                       ),
                     );
@@ -183,27 +294,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 },
                 child: const Text('Resend Email'),
               ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context); // Close dialog
+                  Navigator.pushReplacementNamed(context, '/login');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF6B6B),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('Go to Login'),
+              ),
             ],
           ),
         );
       }
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_getReadableError(e)),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('An unexpected error occurred.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
+      // ✅ Handle Firebase Auth errors
+      String errorMessage = _getReadableError(e);
+
       if (mounted) {
-        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      // ✅ Handle general errors
+      print('Registration error: $e');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Registration failed: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } finally {
+      // ✅ Always reset loading state
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
@@ -377,39 +514,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     onPressed: () => Navigator.pop(context),
                   ),
                   const SizedBox(height: 10),
-                  // Logo & Header
-                  Column(
-                    children: [
-                      Container(
-                        width: 70,
-                        height: 70,
-                        decoration: BoxDecoration(
-                          color: primaryColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(20),
+                  // Centered logo and header
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 70,
+                          height: 70,
+                          decoration: BoxDecoration(
+                            color: primaryColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Icon(
+                            Icons.remove_red_eye,
+                            size: 35,
+                            color: primaryColor,
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.remove_red_eye,
-                          size: 35,
-                          color: primaryColor,
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Create Account',
+                          style: TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Create Account',
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
+                        const SizedBox(height: 8),
+                        Text(
+                          'Register to get started with SmartiCare',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Register to get started with SmartiCare',
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 24),
 
@@ -792,47 +932,130 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const SizedBox(height: 24),
 
                         // Terms and Conditions with detailed text
-                        Row(
+                        // Terms and Conditions with detailed text and links
+                        Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: Checkbox(
-                                value: _agreeToTerms,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _agreeToTerms = value ?? false;
-                                  });
-                                },
-                                activeColor: primaryColor,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(4),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: Checkbox(
+                                    value: _agreeToTerms,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _agreeToTerms = value ?? false;
+                                      });
+                                    },
+                                    activeColor: primaryColor,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'I agree to the terms of service, privacy policy, and consent to the Processing of my personal health information for monitoring my eye health.',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey.shade700,
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'I agree to the terms of service, privacy policy, and consent to the Processing of my personal health information for monitoring my eye health.',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
                                 ),
-                              ),
+                              ],
                             ),
+                            const SizedBox(height: 8),
+                            // Links to read Terms and Privacy Policy
+                            Row(
+                              children: [
+                                const SizedBox(
+                                    width: 32), // Align with checkbox text
+                                Expanded(
+                                  child: Wrap(
+                                    spacing: 16,
+                                    children: [
+                                      GestureDetector(
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  const TermsOfServiceScreen(),
+                                            ),
+                                          );
+                                        },
+                                        child: Text(
+                                          'Read Terms of Service',
+                                          style: TextStyle(
+                                            color: primaryColor,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            decoration:
+                                                TextDecoration.underline,
+                                          ),
+                                        ),
+                                      ),
+                                      GestureDetector(
+                                        onTap: () {
+                                          Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (context) =>
+                                                  const PrivacyPolicyScreen(),
+                                            ),
+                                          );
+                                        },
+                                        child: Text(
+                                          'Read Privacy Policy',
+                                          style: TextStyle(
+                                            color: primaryColor,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            decoration:
+                                                TextDecoration.underline,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
                           ],
                         ),
                         const SizedBox(height: 30),
 
                         // Register Button
+                        // Register Button
                         SizedBox(
                           width: double.infinity,
                           height: 58,
                           child: ElevatedButton(
-                            onPressed: _isLoading
+                            onPressed: (_isLoading ||
+                                    !_agreeToTerms) // ✅ Disabled if not agreed
                                 ? null
                                 : () async {
+                                    if (!_formKey.currentState!.validate())
+                                      return;
+
+                                    // ✅ Extra validation check
+                                    if (!_agreeToTerms) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text(
+                                              'You must agree to the Terms and Conditions to register'),
+                                          backgroundColor: Colors.red,
+                                          duration: Duration(seconds: 3),
+                                        ),
+                                      );
+                                      return;
+                                    }
+
                                     setState(() {
                                       _isLoading = true;
                                     });
@@ -840,15 +1063,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     try {
                                       _registerUser();
                                     } finally {
-                                      setState(() {
-                                        _isLoading = false;
-                                      });
+                                      if (mounted) {
+                                        setState(() {
+                                          _isLoading = false;
+                                        });
+                                      }
                                     }
                                   },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryColor,
-                              foregroundColor: Colors.white,
-                              elevation: _isLoading ? 0 : 2,
+                              backgroundColor: _agreeToTerms
+                                  ? primaryColor
+                                  : Colors.grey.shade300, // ✅ Visual feedback
+                              foregroundColor: _agreeToTerms
+                                  ? Colors.white
+                                  : Colors.grey.shade500,
+                              elevation: (_isLoading || !_agreeToTerms) ? 0 : 2,
                               shadowColor: primaryColor.withOpacity(0.4),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(16),
@@ -863,9 +1092,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       strokeWidth: 2.5,
                                     ),
                                   )
-                                : const Text(
-                                    'Create Account',
-                                    style: TextStyle(
+                                : Text(
+                                    _agreeToTerms
+                                        ? 'Create Account'
+                                        : 'Agree to Terms to Continue', // ✅ Dynamic text
+                                    style: const TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -903,34 +1134,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         const SizedBox(height: 20),
                         // Back to Login
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'Already have an account? ',
-                              style: TextStyle(
-                                color: Colors.grey.shade700,
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.pushReplacementNamed(
-                                  context, '/login'),
-                              style: TextButton.styleFrom(
-                                minimumSize: Size.zero,
-                                padding: const EdgeInsets.only(left: 4),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: const Text(
-                                'Sign In',
-                                style: TextStyle(
-                                  color: primaryColor,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
                       ],
                     ),
                   ),

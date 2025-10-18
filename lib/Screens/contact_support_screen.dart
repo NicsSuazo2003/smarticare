@@ -98,26 +98,47 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
   }
 
   void _submitRequest() {
-    if (_nameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
-        _messageController.text.isEmpty) {
+    final String name = _nameController.text.trim();
+    final String email = _emailController.text.trim();
+    final String message = _messageController.text.trim();
+
+    // Validate all fields
+    if (name.isEmpty || email.isEmpty || message.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please fill all fields')));
+        const SnackBar(
+          content: Text('Please fill all fields'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Validate email format
+    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    if (!emailRegex.hasMatch(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid email address'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
     setState(() => _isLoading = true);
 
-    // Simulate API call
+    // Simulate API call - in real app, you'd send this to your backend
     Future.delayed(const Duration(seconds: 2), () {
       setState(() => _isLoading = false);
 
+      // Show success dialog
       showDialog(
         context: context,
+        barrierDismissible: false,
         builder: (context) => AlertDialog(
-          title: const Text('Successfully Submitted'),
+          title: const Text('Request Submitted'),
           content: const Text(
-            'Your support request has been submitted. Our team will review it shortly.',
+            'Your support request has been submitted successfully. Our team will get back to you shortly.',
           ),
           actions: [
             TextButton(
@@ -130,6 +151,13 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
           ],
         ),
       );
+
+      // Log the support request (optional)
+      print('Support Request Submitted:');
+      print('Name: $name');
+      print('Email: $email');
+      print('Issue Type: $_selectedIssueType');
+      print('Message: $message');
     });
   }
 
@@ -157,53 +185,6 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
       body: Column(
         children: [
           // Date and User info - With formatted text as requested
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Date/time display
-                  Wrap(
-                    children: [
-                      Icon(Icons.access_time,
-                          size: 14, color: Colors.grey.shade600),
-                      const SizedBox(width: 6),
-                      const Text(
-                        "Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): 2025-06-16 14:44:15",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  // User info
-                  Row(
-                    children: [
-                      Icon(Icons.person, size: 14, color: Colors.grey.shade600),
-                      const SizedBox(width: 6),
-                      const Text(
-                        "Current User's Login: Arsisjay",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
 
           // Main content
           Expanded(
@@ -333,6 +314,8 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
+                                color:
+                                    Colors.white, // Ensure text color is white
                               ),
                             ),
                     ),

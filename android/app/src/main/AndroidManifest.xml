@@ -1,33 +1,8 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
-  
-  <!-- Notifications -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-  
-  <!-- Camera - Required for eye scanning -->
-  <uses-permission android:name="android.permission.CAMERA"/>
-  
-  <!-- Storage - Required for saving scan results, PDFs, and images -->
-  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-      android:maxSdkVersion="32" />
-  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-      android:maxSdkVersion="32"
-      tools:replace="android:maxSdkVersion" />
-  
-  <!-- Android 13+ Photo/Media permissions -->
-  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
-  
-  <!-- Internet - Required for Firebase, cloud storage, and data sync -->
   <uses-permission android:name="android.permission.INTERNET"/>
-  
-  <!-- Network State - Check connectivity before syncing medical data -->
-  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-  
-  <!-- Vibrate - For reminder notifications -->
-  <uses-permission android:name="android.permission.VIBRATE"/>
-  
   <application
-      android:label="SmartICare"
+      android:label="SmartiCare"
       android:name="${applicationName}"
       android:icon="@mipmap/ic_launcher">
       <activity
@@ -39,24 +14,22 @@
           android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
           android:hardwareAccelerated="true"
           android:windowSoftInputMode="adjustResize">
-          <meta-data
-            android:name="io.flutter.embedding.android.NormalTheme"
-            android:resource="@style/NormalTheme"
-            />
-          <intent-filter>
-              <action android:name="android.intent.action.MAIN"/>
-              <category android:name="android.intent.category.LAUNCHER"/>
-          </intent-filter>
+        <meta-data
+          android:name="io.flutter.embedding.android.NormalTheme"
+          android:resource="@style/NormalTheme" />
+        <intent-filter>
+          <action android:name="android.intent.action.MAIN"/>
+          <category android:name="android.intent.category.LAUNCHER"/>
+        </intent-filter>
       </activity>
       <meta-data
           android:name="flutterEmbedding"
           android:value="2" />
   </application>
-  
   <queries>
-      <intent>
-          <action android:name="android.intent.action.PROCESS_TEXT"/>
-          <data android:mimeType="text/plain"/>
-      </intent>
+    <intent>
+      <action android:name="android.intent.action.PROCESS_TEXT"/>
+      <data android:mimeType="text/plain"/>
+    </intent>
   </queries>
 </manifest>

@@ -46,6 +46,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
 
     DocumentSnapshot? scanDoc;
     Map<String, dynamic>? scan;
+
     // Fetch scan: specific if scanId, else latest
     if (widget.scanId != null) {
       scanDoc = await FirebaseFirestore.instance
@@ -63,9 +64,12 @@ class _FullReportScreenState extends State<FullReportScreen> {
           .orderBy('timestamp', descending: true)
           .limit(1)
           .get();
-      scan = scanDocs.docs.isNotEmpty ? scanDocs.docs.first.data() : null;
+      scan = scanDocs.docs.isNotEmpty ? scanDocs.docs.first.data() : {};
       scanDoc = scanDocs.docs.isNotEmpty ? scanDocs.docs.first : null;
     }
+
+    // Ensure scan is never null
+    scan ??= {};
 
     // Fetch assessment: latest if none, else match timestamp if possible
     QuerySnapshot assessmentDocs = await FirebaseFirestore.instance
@@ -75,9 +79,9 @@ class _FullReportScreenState extends State<FullReportScreen> {
         .orderBy('timestamp', descending: true)
         .limit(1)
         .get();
-    Map<String, dynamic>? assessment = (assessmentDocs.docs.isNotEmpty
-        ? assessmentDocs.docs.first.data()
-        : null) as Map<String, dynamic>?;
+    Map<String, dynamic>? assessment = assessmentDocs.docs.isNotEmpty
+        ? assessmentDocs.docs.first.data() as Map<String, dynamic>
+        : {};
 
     setState(() {
       _profile = profile;
@@ -144,6 +148,12 @@ class _FullReportScreenState extends State<FullReportScreen> {
     } catch (_) {
       return ts.toString();
     }
+  }
+
+  bool isCataractResult(String? prediction) {
+    if (prediction == null) return false;
+    final p = prediction.toLowerCase();
+    return !(p.contains('normal') || p.contains('no cataract'));
   }
 
   void _shareReport() {
@@ -464,6 +474,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFFFF6B6B);
     const Color successColor = Color(0xFF28A745);
+    final bool cataract = isCataractResult(_scan?['prediction']);
 
     String displayName = _profile?['firstName'] ??
         _profile?['username'] ??
@@ -509,49 +520,6 @@ class _FullReportScreenState extends State<FullReportScreen> {
           icon: const Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () => Navigator.pop(context),
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.black),
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                builder: (BuildContext context) {
-                  return SafeArea(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: <Widget>[
-                        ListTile(
-                          leading: const Icon(Icons.share),
-                          title: const Text('Share Report'),
-                          onTap: () {
-                            Navigator.pop(context);
-                            _shareReport();
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.print),
-                          title: const Text('Print Report'),
-                          onTap: () {
-                            Navigator.pop(context);
-                            _printReport();
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.download),
-                          title: const Text('Download PDF'),
-                          onTap: () {
-                            Navigator.pop(context);
-                            _downloadPdf();
-                          },
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -888,6 +856,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                         : Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // In the Eye Scan Summary section, replace this part:
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
@@ -909,7 +878,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                       borderRadius: BorderRadius.circular(16),
                                     ),
                                     child: Text(
-                                      _scan?['prediction'] ?? 'Unknown',
+                                      _scan?['prediction'] ?? 'No data',
                                       style: TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w500,
@@ -920,6 +889,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                 ],
                               ),
                               const SizedBox(height: 16),
+
                               Row(
                                 children: [
                                   Expanded(
@@ -928,7 +898,10 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                       value: _scan?['healthScore'] != null
                                           ? '${_scan!['healthScore']}%'
                                           : 'N/A',
-                                      iconColor: const Color(0xFF28A745),
+                                      iconColor: cataract
+                                          ? Colors.red
+                                          : const Color(0xFF28A745),
+                                      valueColor: cataract ? Colors.red : null,
                                     ),
                                   ),
                                   Container(
@@ -940,7 +913,10 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                     child: _buildResultMetric(
                                       label: 'Risk Level',
                                       value: _scan?['riskLevel'] ?? 'N/A',
-                                      iconColor: const Color(0xFF28A745),
+                                      iconColor: cataract
+                                          ? Colors.red
+                                          : const Color(0xFF28A745),
+                                      valueColor: cataract ? Colors.red : null,
                                     ),
                                   ),
                                 ],
@@ -1331,6 +1307,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
     required String label,
     required String value,
     required Color iconColor,
+    Color? valueColor, // Add this param
   }) {
     return Column(
       children: [
@@ -1361,7 +1338,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: iconColor,
+            color: valueColor ?? iconColor, // Use valueColor if provided
           ),
         ),
       ],

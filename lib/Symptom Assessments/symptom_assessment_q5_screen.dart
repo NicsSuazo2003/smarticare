@@ -141,6 +141,7 @@ class _SymptomAssessmentQ5ScreenState extends State<SymptomAssessmentQ5Screen> {
                     const SizedBox(height: 24),
 
                     // Image
+                    // Image container (overlay icons removed)
                     Container(
                       height: 180,
                       width: double.infinity,
@@ -148,27 +149,8 @@ class _SymptomAssessmentQ5ScreenState extends State<SymptomAssessmentQ5Screen> {
                         color: Colors.grey.shade200,
                         borderRadius: BorderRadius.circular(16),
                         image: const DecorationImage(
-                          image: AssetImage('assets/images/faded_colors.png'),
+                          image: AssetImage('assets/images/faded_colors.jpg'),
                           fit: BoxFit.cover,
-                        ),
-                      ),
-                      // Use this if you don't have the image
-                      child: Center(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.palette,
-                              size: 50,
-                              color: Colors.grey.shade700,
-                            ),
-                            const SizedBox(width: 20),
-                            Icon(
-                              Icons.palette,
-                              size: 50,
-                              color: Colors.yellow.shade700.withOpacity(0.7),
-                            ),
-                          ],
                         ),
                       ),
                     ),
@@ -261,9 +243,9 @@ class _SymptomAssessmentQ5ScreenState extends State<SymptomAssessmentQ5Screen> {
                           ),
                           SizedBox(width: 8),
                           Text(
-                            'Previous',
+                            'Back',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 10,
                               fontWeight: FontWeight.w500,
                             ),
                           ),

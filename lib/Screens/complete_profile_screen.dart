@@ -1,9 +1,12 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_application_1/Screens/eye_scan_screen.dart';
-import 'package:flutter_application_1/Screens/symptom_assessment_screen.dart';
+
 import 'package:flutter_application_1/audit_log_service.dart';
+import 'package:flutter_application_1/screens/login.dart';
 import 'package:intl/intl.dart';
+import 'eye_scan_screen.dart';
+import 'symptom_assessment_screen.dart';
 
 class CompleteProfileScreen extends StatefulWidget {
   final String uid;
@@ -104,17 +107,30 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         'username': _usernameController.text.trim(),
         'createdAt': DateTime.now().toIso8601String(),
         'role': 'Patient',
+        'status': 'active',
+        'agreedToTerms': true,
+        'agreedToTermsAt': FieldValue.serverTimestamp(),
+        'emailVerified': true,
       });
+
       await AuditLogService.logAction(
         action: 'complete_profile',
         details: 'User completed profile with email: ${widget.email}',
       );
 
+      await FirebaseFirestore.instance.collection('admin_notifications').add({
+        'type': 'profile_completed',
+        'message': 'User completed profile: ${widget.email}',
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+        'relatedUserId': widget.uid,
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile completed!')),
       );
 
-      // ✅ CHANGED: Check if they need assessment/scan first
+      // After successfully writing profile, route appropriately
       await _afterProfileComplete(context, widget.uid);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -125,12 +141,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     }
   }
 
-  // Add this method to CompleteProfileScreen
   Future<void> _afterProfileComplete(
       BuildContext context, String userId) async {
     final firestore = FirebaseFirestore.instance;
 
-    // 1. Check for assessment history
     final assessments = await firestore
         .collection('users')
         .doc(userId)
@@ -138,7 +152,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         .limit(1)
         .get();
 
-    // 2. Check for scan history
     final scans = await firestore
         .collection('users')
         .doc(userId)
@@ -153,7 +166,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         MaterialPageRoute(
           builder: (context) => SymptomAssessmentScreen(
             onStart: () {
-              // After assessment, go to Eye Scan
               Navigator.pushReplacement(
                 context,
                 MaterialPageRoute(
@@ -165,7 +177,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         ),
       );
     } else {
-      // User already has data, go to Home
+      // User already has data, go to Home (use named route)
       Navigator.pushReplacementNamed(context, '/home');
     }
   }
@@ -174,123 +186,175 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFFFF6B6B);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Complete Your Profile')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // First Name
-              TextFormField(
-                controller: _firstNameController,
-                decoration: const InputDecoration(labelText: 'First Name *'),
-                validator: (val) =>
-                    val == null || val.isEmpty ? 'Required' : null,
+    // Wrap scaffold with WillPopScope to intercept device back press
+    return WillPopScope(
+      onWillPop: () async {
+        // Ask user for confirmation before leaving incomplete profile flow
+        final shouldLeave = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Leave registration?'),
+            content: const Text(
+              'Your profile is not yet complete. If you leave now you will be signed out and will need to sign in again to continue.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Stay'),
               ),
-              const SizedBox(height: 12),
-              // Middle Name
-              TextFormField(
-                controller: _middleNameController,
-                decoration: const InputDecoration(labelText: 'Middle Name'),
-              ),
-              const SizedBox(height: 12),
-              // Last Name
-              TextFormField(
-                controller: _lastNameController,
-                decoration: const InputDecoration(labelText: 'Last Name *'),
-                validator: (val) =>
-                    val == null || val.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              // Gender
-              DropdownButtonFormField<String>(
-                value: _selectedGender,
-                items: [
-                  'Select Gender',
-                  'Male',
-                  'Female',
-                  'Non-binary',
-                  'Prefer not to say'
-                ]
-                    .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                    .toList(),
-                onChanged: (val) => setState(() => _selectedGender = val!),
-                decoration: const InputDecoration(labelText: 'Gender *'),
-                validator: (val) => val == 'Select Gender' ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              // Date of Birth
-              InkWell(
-                onTap: () => _selectDate(context),
-                child: InputDecorator(
-                  decoration:
-                      const InputDecoration(labelText: "Date of Birth *"),
-                  child: Text(
-                    _selectedDate == null
-                        ? 'Tap to select date'
-                        : DateFormat('MMMM d, yyyy').format(_selectedDate!),
-                  ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white, // 👈 makes the text white
                 ),
-              ),
-              const SizedBox(height: 12),
-
-              // Phone
-              TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(labelText: 'Phone Number *'),
-                keyboardType: TextInputType.phone,
-                validator: (val) =>
-                    val == null || val.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              // Address
-              TextFormField(
-                controller: _addressController,
-                decoration: const InputDecoration(labelText: 'Address *'),
-                validator: (val) =>
-                    val == null || val.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              // City
-              TextFormField(
-                controller: _cityController,
-                decoration: const InputDecoration(labelText: 'City *'),
-                validator: (val) =>
-                    val == null || val.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              // ZIP Code
-              TextFormField(
-                controller: _zipCodeController,
-                decoration: const InputDecoration(labelText: 'ZIP Code *'),
-                keyboardType: TextInputType.number,
-                validator: (val) =>
-                    val == null || val.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              // Username
-              TextFormField(
-                controller: _usernameController,
-                decoration: const InputDecoration(labelText: 'Username *'),
-                validator: (val) =>
-                    val == null || val.isEmpty ? 'Required' : null,
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _submit,
-                  child: _isLoading
-                      ? const CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2)
-                      : const Text('Complete Registration'),
-                ),
+                child: const Text('Leave'),
               ),
             ],
+          ),
+        );
+
+        if (shouldLeave == true) {
+          // Sign out the Firebase user so app won't treat them as fully logged-in
+          try {
+            await FirebaseAuth.instance.signOut();
+          } catch (e) {
+            print('Sign out error: $e');
+          }
+
+          // Navigate to login and clear stack
+          if (context.mounted) {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+              (route) => false,
+            );
+          }
+          return false; // we handled navigation
+        }
+
+        // stay in place (do not pop)
+        return false;
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Complete Your Profile')),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // First Name
+                TextFormField(
+                  controller: _firstNameController,
+                  decoration: const InputDecoration(labelText: 'First Name *'),
+                  validator: (val) =>
+                      val == null || val.isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                // Middle Name
+                TextFormField(
+                  controller: _middleNameController,
+                  decoration: const InputDecoration(labelText: 'Middle Name'),
+                ),
+                const SizedBox(height: 12),
+                // Last Name
+                TextFormField(
+                  controller: _lastNameController,
+                  decoration: const InputDecoration(labelText: 'Last Name *'),
+                  validator: (val) =>
+                      val == null || val.isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                // Gender
+                DropdownButtonFormField<String>(
+                  value: _selectedGender,
+                  items: [
+                    'Select Gender',
+                    'Male',
+                    'Female',
+                    'Non-binary',
+                    'Prefer not to say'
+                  ]
+                      .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                      .toList(),
+                  onChanged: (val) => setState(() => _selectedGender = val!),
+                  decoration: const InputDecoration(labelText: 'Gender *'),
+                  validator: (val) =>
+                      val == 'Select Gender' ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                // Date of Birth
+                InkWell(
+                  onTap: () => _selectDate(context),
+                  child: InputDecorator(
+                    decoration:
+                        const InputDecoration(labelText: "Date of Birth *"),
+                    child: Text(
+                      _selectedDate == null
+                          ? 'Tap to select date'
+                          : DateFormat('MMMM d, yyyy').format(_selectedDate!),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Phone
+                TextFormField(
+                  controller: _phoneController,
+                  decoration:
+                      const InputDecoration(labelText: 'Phone Number *'),
+                  keyboardType: TextInputType.phone,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                // Address
+                TextFormField(
+                  controller: _addressController,
+                  decoration: const InputDecoration(labelText: 'Address *'),
+                  validator: (val) =>
+                      val == null || val.isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                // City
+                TextFormField(
+                  controller: _cityController,
+                  decoration: const InputDecoration(labelText: 'City *'),
+                  validator: (val) =>
+                      val == null || val.isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                // ZIP Code
+                TextFormField(
+                  controller: _zipCodeController,
+                  decoration: const InputDecoration(labelText: 'ZIP Code *'),
+                  keyboardType: TextInputType.number,
+                  validator: (val) =>
+                      val == null || val.isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                // Username
+                TextFormField(
+                  controller: _usernameController,
+                  decoration: const InputDecoration(labelText: 'Username *'),
+                  validator: (val) =>
+                      val == null || val.isEmpty ? 'Required' : null,
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _submit,
+                    child: _isLoading
+                        ? const CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2)
+                        : const Text('Complete Registration'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -142,6 +142,7 @@ class _SymptomAssessmentQ4ScreenState extends State<SymptomAssessmentQ4Screen> {
                     const SizedBox(height: 24),
 
                     // Image
+                    // Image container (overlay icon removed)
                     Container(
                       height: 180,
                       width: double.infinity,
@@ -149,16 +150,8 @@ class _SymptomAssessmentQ4ScreenState extends State<SymptomAssessmentQ4Screen> {
                         color: Colors.grey.shade200,
                         borderRadius: BorderRadius.circular(16),
                         image: const DecorationImage(
-                          image: AssetImage('assets/images/light_halos.png'),
+                          image: AssetImage('assets/images/light_halos.jpg'),
                           fit: BoxFit.cover,
-                        ),
-                      ),
-                      // Use this if you don't have the image
-                      child: Center(
-                        child: Icon(
-                          Icons.blur_circular,
-                          size: 60,
-                          color: Colors.grey.shade500,
                         ),
                       ),
                     ),
@@ -251,9 +244,9 @@ class _SymptomAssessmentQ4ScreenState extends State<SymptomAssessmentQ4Screen> {
                           ),
                           SizedBox(width: 8),
                           Text(
-                            'Previous',
+                            'Back',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 10,
                               fontWeight: FontWeight.w500,
                             ),
                           ),

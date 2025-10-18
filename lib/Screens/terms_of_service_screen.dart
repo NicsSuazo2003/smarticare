@@ -90,51 +90,7 @@ class _TermsOfServiceScreenState extends State<TermsOfServiceScreen> {
       body: Column(
         children: [
           // Date and User info
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    children: [
-                      Icon(Icons.access_time,
-                          size: 14, color: Colors.grey.shade600),
-                      const SizedBox(width: 6),
-                      const Text(
-                        "Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): 2025-10-08 18:09:14",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(Icons.person, size: 14, color: Colors.grey.shade600),
-                      const SizedBox(width: 6),
-                      const Text(
-                        "Current User's Login: tmae20",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
+
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -150,115 +106,133 @@ class _TermsOfServiceScreenState extends State<TermsOfServiceScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Last Updated: October 8, 2025',
+                    'Effective Date: October 1, 2025',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey.shade700,
                     ),
                   ),
                   const SizedBox(height: 20),
+
+                  // 1. Acceptance of Terms
                   const Text(
-                    'Welcome to SmartiCare! By using our eye screening and health platform (“the App”), you agree to these Terms of Service (“Terms”). Please read them carefully.',
-                    style: TextStyle(fontSize: 15, height: 1.7),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    '1. Use of the App',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    '• The App provides cataract risk assessments and eye health monitoring tools for informational and educational purposes.\n'
-                    '• The App is not a substitute for professional medical diagnosis, advice, or treatment. Always consult a qualified healthcare provider for health concerns.',
-                    style: TextStyle(fontSize: 14, height: 1.6),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    '2. User Account and Responsibilities',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    '1. Acceptance of Terms',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    '• You must provide accurate and complete information when creating an account.\n'
-                    '• You are responsible for maintaining the confidentiality of your account credentials.\n'
-                    '• You agree not to misuse the App or submit false or harmful information.',
-                    style: TextStyle(fontSize: 14, height: 1.6),
+                    'By using SmartiCare, users agree to comply with these terms. If a user disagrees, they should stop using the app.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
                   ),
                   const SizedBox(height: 20),
+
+                  // 2. Purpose of the Application
                   const Text(
-                    '3. Health Data and Consent',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    '2. Purpose of the Application',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    '• By using the App, you consent to the collection, processing, and storage of your health and personal data as described in our Privacy Policy.\n'
-                    '• You grant us permission to use de-identified data for research and service improvement.',
-                    style: TextStyle(fontSize: 14, height: 1.6),
+                    'SmartiCare is a cataract pre-screening tool developed for public health awareness and early detection support. It is not intended to replace medical consultations or professional diagnosis.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
                   ),
                   const SizedBox(height: 20),
+
+                  // 3. User Responsibilities
                   const Text(
-                    '4. Intellectual Property',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    '3. User Responsibilities',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    '• All content, algorithms, and materials within the App are owned or licensed by SmartiCare and are protected by law.\n'
-                    '• You may not copy, reproduce, or distribute any part of the App without written permission.',
-                    style: TextStyle(fontSize: 14, height: 1.6),
+                    'Users must:',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
                   ),
+                  const SizedBox(height: 10),
+                  _buildBulletItem(
+                      'Use the app only for personal or educational purposes.'),
+                  _buildBulletItem(
+                      'Understand that results generated are estimates and should not be treated as final medical assessments.'),
+                  _buildBulletItem(
+                      'Consult a certified eye specialist for confirmation of results.'),
                   const SizedBox(height: 20),
+
+                  // 4. Limitation of Liability
                   const Text(
-                    '5. Limitation of Liability',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    '4. Limitation of Liability',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    '• The App provides preliminary assessments and recommendations only. We are not liable for any decisions you make based on app results.\n'
-                    '• We make no guarantees regarding accuracy or completeness of assessments.\n'
-                    '• To the fullest extent permitted by law, SmartiCare and its affiliates are not responsible for any damages or losses arising from your use of the App.',
-                    style: TextStyle(fontSize: 14, height: 1.6),
+                    'The developers and partner barangay health units are not responsible for:',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
                   ),
+                  const SizedBox(height: 10),
+                  _buildBulletItem(
+                      'Misinterpretation of pre-screening results.'),
+                  _buildBulletItem(
+                      'Consequences arising from failure to seek professional care.'),
+                  _buildBulletItem(
+                      'Technical issues beyond their control (e.g., internet outages, device errors).'),
                   const SizedBox(height: 20),
+
+                  // 5. Data Accuracy and Availability
                   const Text(
-                    '6. Account Termination',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    '5. Data Accuracy and Availability',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    '• We reserve the right to suspend or terminate your account for violation of these Terms or misuse of the App.\n'
-                    '• You may delete your account at any time in the app.',
-                    style: TextStyle(fontSize: 14, height: 1.6),
+                    'SmartiCare\'s results depend on the quality of the captured image and device performance. Accuracy may vary depending on camera quality, lighting conditions, and device specifications.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
                   ),
                   const SizedBox(height: 20),
+
+                  // 6. Contact Information
                   const Text(
-                    '7. Modifications and Updates',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    '6. Contact Information',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    '• We may update these Terms from time to time. Significant changes will be notified via the app or by email. Continued use constitutes acceptance.',
-                    style: TextStyle(fontSize: 14, height: 1.6),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    '8. Governing Law',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    '• These Terms are governed by the laws of your country or region of residence.',
-                    style: TextStyle(fontSize: 14, height: 1.6),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    '9. Contact Us',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'For any questions or concerns about these Terms, please contact:\n'
-                    'support@smarticare.com',
-                    style: TextStyle(fontSize: 14, height: 1.6),
+                    'For questions or concerns about this policy, users may contact: smarticare25@gmail.com',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
                   ),
                   const SizedBox(height: 30),
                 ],
@@ -268,6 +242,33 @@ class _TermsOfServiceScreenState extends State<TermsOfServiceScreen> {
         ],
       ),
       bottomNavigationBar: _buildBottomNavigationBar(),
+    );
+  }
+
+  Widget _buildBulletItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '• ',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

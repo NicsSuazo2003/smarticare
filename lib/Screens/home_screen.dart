@@ -52,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     print("HomeScreen initState called");
+    LatestScanCache.clearCache();
     _updateDateTime();
     _fetchEyeHealthData();
     _fetchRecentActivities();
@@ -288,115 +289,135 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingMetrics = true;
       });
 
-      // Process left eye data
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) {
+        setState(() {
+          _isLoadingMetrics = false;
+        });
+        return;
+      }
+
       Map<String, dynamic> leftEyeData = {
         'status': 'Unknown',
         'score': 0,
         'stage': 'No Data'
       };
 
-      // Check cache first for left eye
-      if (LatestScanCache.hasEyeData(true)) {
-        print("Using cached left eye data");
-        final prediction = LatestScanCache.leftEyePrediction;
-        final confidence = LatestScanCache.leftEyeConfidence;
-
-        final bool isNormal = prediction.toLowerCase().contains('normal') ||
-            prediction.toLowerCase() == "no cataract";
-
-        leftEyeData = {
-          'status': isNormal ? 'Normal' : 'Immature',
-          'score': (confidence * 100).round(),
-          'stage': isNormal ? 'No Cataract' : 'Initial Stage'
-        };
-      } else {
-        // Fall back to Firebase if no cache
-        final userId = FirebaseAuth.instance.currentUser?.uid;
-        if (userId != null) {
-          final leftEyeQuery = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .collection('scans')
-              .where('eye', isEqualTo: 'Left Eye')
-              .orderBy('timestamp', descending: true)
-              .limit(1)
-              .get();
-
-          if (leftEyeQuery.docs.isNotEmpty) {
-            final doc = leftEyeQuery.docs.first;
-            final data = doc.data();
-
-            final prediction = data['prediction'] as String? ?? '';
-            final confidence = data['confidence'] as double? ?? 0.0;
-
-            // Also update the cache
-            LatestScanCache.updateLeftEye(prediction, confidence);
-
-            final bool isNormal = prediction.toLowerCase().contains('normal') ||
-                prediction.toLowerCase() == "no cataract";
-
-            leftEyeData = {
-              'status': isNormal ? 'Normal' : 'Immature',
-              'score': (confidence * 100).round(),
-              'stage': isNormal ? 'No Cataract' : 'Initial Stage'
-            };
-          }
-        }
-      }
-
-      // Process right eye data
       Map<String, dynamic> rightEyeData = {
         'status': 'Unknown',
         'score': 0,
         'stage': 'No Data'
       };
 
-      // Check cache first for right eye
-      if (LatestScanCache.hasEyeData(false)) {
-        print("Using cached right eye data");
-        final prediction = LatestScanCache.rightEyePrediction;
-        final confidence = LatestScanCache.rightEyeConfidence;
+      bool fetchSuccessful = false;
 
-        final bool isNormal = prediction.toLowerCase().contains('normal') ||
-            prediction.toLowerCase() == "no cataract";
+      // Try to fetch from Firebase first
+      try {
+        // Fetch left eye data from Firebase
+        final leftEyeQuery = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('scans')
+            .where('eye', isEqualTo: 'Left Eye')
+            .orderBy('timestamp', descending: true)
+            .limit(1)
+            .get();
 
-        rightEyeData = {
-          'status': isNormal ? 'Normal' : 'Immature',
-          'score': (confidence * 100).round(),
-          'stage': isNormal ? 'No Cataract' : 'Initial Stage'
-        };
-      } else {
-        // Fall back to Firebase if no cache
-        final userId = FirebaseAuth.instance.currentUser?.uid;
-        if (userId != null) {
-          final rightEyeQuery = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .collection('scans')
-              .where('eye', isEqualTo: 'Right Eye')
-              .orderBy('timestamp', descending: true)
-              .limit(1)
-              .get();
+        if (leftEyeQuery.docs.isNotEmpty) {
+          final doc = leftEyeQuery.docs.first;
+          final data = doc.data();
 
-          if (rightEyeQuery.docs.isNotEmpty) {
-            final doc = rightEyeQuery.docs.first;
-            final data = doc.data();
+          final prediction = data['prediction'] as String? ?? '';
+          final double healthScore = data['healthScore'] as double? ??
+              data['confidence'] as double? ??
+              0.0;
 
-            final prediction = data['prediction'] as String? ?? '';
-            final confidence = data['confidence'] as double? ?? 0.0;
+          print(
+              "LEFT EYE - Prediction: $prediction, HealthScore: $healthScore");
 
-            // Also update the cache
-            LatestScanCache.updateRightEye(prediction, confidence);
+          final bool isNormal = prediction.toLowerCase().contains('normal') ||
+              prediction.toLowerCase() == "no cataract";
 
-            final bool isNormal = prediction.toLowerCase().contains('normal') ||
-                prediction.toLowerCase() == "no cataract";
+          leftEyeData = {
+            'status': isNormal ? 'Normal' : 'Immature',
+            'score': (healthScore * 100).round(),
+            'stage': isNormal ? 'No Cataract' : 'Initial Stage'
+          };
 
-            rightEyeData = {
-              'status': isNormal ? 'Normal' : 'Immature',
-              'score': (confidence * 100).round(),
-              'stage': isNormal ? 'No Cataract' : 'Initial Stage'
-            };
-          }
+          // Update cache with fresh data
+          LatestScanCache.updateLeftEye(prediction, healthScore);
+          fetchSuccessful = true;
+        }
+
+        // Fetch right eye data from Firebase
+        final rightEyeQuery = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('scans')
+            .where('eye', isEqualTo: 'Right Eye')
+            .orderBy('timestamp', descending: true)
+            .limit(1)
+            .get();
+
+        if (rightEyeQuery.docs.isNotEmpty) {
+          final doc = rightEyeQuery.docs.first;
+          final data = doc.data();
+
+          final prediction = data['prediction'] as String? ?? '';
+          final double healthScore = data['healthScore'] as double? ??
+              data['confidence'] as double? ??
+              0.0;
+
+          print(
+              "RIGHT EYE - Prediction: $prediction, HealthScore: $healthScore");
+
+          final bool isNormal = prediction.toLowerCase().contains('normal') ||
+              prediction.toLowerCase() == "no cataract";
+
+          rightEyeData = {
+            'status': isNormal ? 'Normal' : 'Immature',
+            'score': (healthScore * 100).round(),
+            'stage': isNormal ? 'No Cataract' : 'Initial Stage'
+          };
+
+          LatestScanCache.updateRightEye(prediction, healthScore);
+          fetchSuccessful = true;
+        }
+      } catch (e) {
+        print('Error fetching from Firebase (might be offline): $e');
+        // Fall back to cache if Firebase fails
+        fetchSuccessful = false;
+      }
+
+      // If Firebase fetch failed (offline), use cache data
+      if (!fetchSuccessful) {
+        print('Using cached data (offline mode)');
+        if (LatestScanCache.hasEyeData(true)) {
+          final prediction = LatestScanCache.leftEyePrediction;
+          final confidence = LatestScanCache.leftEyeConfidence;
+
+          final bool isNormal = prediction.toLowerCase().contains('normal') ||
+              prediction.toLowerCase() == "no cataract";
+
+          leftEyeData = {
+            'status': isNormal ? 'Normal' : 'Immature',
+            'score': (confidence * 100).round(),
+            'stage': isNormal ? 'No Cataract' : 'Initial Stage'
+          };
+        }
+
+        if (LatestScanCache.hasEyeData(false)) {
+          final prediction = LatestScanCache.rightEyePrediction;
+          final confidence = LatestScanCache.rightEyeConfidence;
+
+          final bool isNormal = prediction.toLowerCase().contains('normal') ||
+              prediction.toLowerCase() == "no cataract";
+
+          rightEyeData = {
+            'status': isNormal ? 'Normal' : 'Immature',
+            'score': (confidence * 100).round(),
+            'stage': isNormal ? 'No Cataract' : 'Initial Stage'
+          };
         }
       }
 
@@ -429,7 +450,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingMetrics = false;
       });
     } catch (e) {
-      print('Error fetching eye health data: $e');
+      print('Error in _fetchEyeHealthData: $e');
       setState(() {
         _isLoadingMetrics = false;
       });
@@ -479,6 +500,22 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onNavItemTapped(int index) {
+    // ✅ Special handling for Eye Scan - always allow it to open
+    if (index == 2) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SymptomAssessmentScreen(
+            onStart: () {
+              Navigator.pop(context);
+            },
+          ),
+        ),
+      );
+      return; // Don't update selected index for Eye Scan
+    }
+
+    // ✅ For other tabs, check if already selected
     if (_selectedNavIndex == index) {
       return; // Already on this tab, do nothing
     }
@@ -496,18 +533,6 @@ class _HomeScreenState extends State<HomeScreen> {
           context,
           MaterialPageRoute(builder: (context) => const ProgressScreen()),
           (route) => false,
-        );
-        break;
-      case 2: // Eye Scan
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => SymptomAssessmentScreen(
-              onStart: () {
-                Navigator.pop(context);
-              },
-            ),
-          ),
         );
         break;
       case 3: // Reminders
@@ -532,10 +557,6 @@ class _HomeScreenState extends State<HomeScreen> {
     const Color primaryColor = Color(0xFFFF6B6B);
     const Color secondaryColor = Color(0xFF4A6572);
     final Size size = MediaQuery.of(context).size;
-    double maxWidth = ((MediaQuery.of(context).size.width - 72) / 2);
-    double percent = (_eyeHealthData['leftEye']['score'] ?? 0) / 100.0;
-    double barWidth = maxWidth * percent;
-    barWidth = min(barWidth, maxWidth); // Clamp to available width
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
@@ -560,10 +581,14 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: primaryColor.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(
-                            Icons.remove_red_eye,
-                            size: 24,
-                            color: primaryColor,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.asset(
+                              'assets/images/icon.png',
+                              fit: BoxFit.cover,
+                              width: 40,
+                              height: 40,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -600,10 +625,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             ),
                           ],
                         ),
-                        child: const Center(
+                        child: Center(
                           child: Text(
-                            "A",
-                            style: TextStyle(
+                            _username.isNotEmpty
+                                ? _username[0].toUpperCase()
+                                : "A", // ✅ DYNAMIC - uses first letter of username
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: Colors.blue,
@@ -751,6 +778,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
               // Your Eye Health Section
+              // Your Eye Health Section
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
@@ -842,6 +870,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                       ),
                                       const SizedBox(height: 16),
+                                      // FIXED: Use proper width calculation for left eye
                                       Container(
                                         width: double.infinity,
                                         height: 6,
@@ -850,20 +879,34 @@ class _HomeScreenState extends State<HomeScreen> {
                                           borderRadius:
                                               BorderRadius.circular(3),
                                         ),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: barWidth,
-                                              decoration: BoxDecoration(
-                                                color: _getStatusColor(
-                                                    _eyeHealthData['leftEye']
-                                                        ['status'],
-                                                    true),
-                                                borderRadius:
-                                                    BorderRadius.circular(3),
-                                              ),
-                                            ),
-                                          ],
+                                        child: LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            double leftPercent =
+                                                (_eyeHealthData['leftEye']
+                                                            ['score'] ??
+                                                        0) /
+                                                    100.0;
+                                            double leftBarWidth =
+                                                constraints.maxWidth *
+                                                    leftPercent;
+                                            return Row(
+                                              children: [
+                                                Container(
+                                                  width: leftBarWidth,
+                                                  decoration: BoxDecoration(
+                                                    color: _getStatusColor(
+                                                        _eyeHealthData[
+                                                                'leftEye']
+                                                            ['status'],
+                                                        true),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            3),
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          },
                                         ),
                                       ),
                                       const SizedBox(height: 8),
@@ -953,6 +996,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                       ),
                                       const SizedBox(height: 16),
+                                      // FIXED: Use proper width calculation for right eye
                                       Container(
                                         width: double.infinity,
                                         height: 6,
@@ -961,27 +1005,34 @@ class _HomeScreenState extends State<HomeScreen> {
                                           borderRadius:
                                               BorderRadius.circular(3),
                                         ),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: ((MediaQuery.of(context)
-                                                              .size
-                                                              .width -
-                                                          72) /
-                                                      2) *
-                                                  (_eyeHealthData['rightEye']
-                                                          ['score'] /
-                                                      100),
-                                              decoration: BoxDecoration(
-                                                color: _getStatusColor(
-                                                    _eyeHealthData['rightEye']
-                                                        ['status'],
-                                                    false),
-                                                borderRadius:
-                                                    BorderRadius.circular(3),
-                                              ),
-                                            ),
-                                          ],
+                                        child: LayoutBuilder(
+                                          builder: (context, constraints) {
+                                            double rightPercent =
+                                                (_eyeHealthData['rightEye']
+                                                            ['score'] ??
+                                                        0) /
+                                                    100.0;
+                                            double rightBarWidth =
+                                                constraints.maxWidth *
+                                                    rightPercent;
+                                            return Row(
+                                              children: [
+                                                Container(
+                                                  width: rightBarWidth,
+                                                  decoration: BoxDecoration(
+                                                    color: _getStatusColor(
+                                                        _eyeHealthData[
+                                                                'rightEye']
+                                                            ['status'],
+                                                        false),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            3),
+                                                  ),
+                                                ),
+                                              ],
+                                            );
+                                          },
                                         ),
                                       ),
                                       const SizedBox(height: 8),
@@ -1322,14 +1373,33 @@ class _HomeScreenState extends State<HomeScreen> {
                         _buildQuickAction(
                           icon: Icons.document_scanner,
                           color: primaryColor,
-                          label: "Recent Scan", // RENAMED
+                          label: "Recent Scan",
                           onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const FullReportScreen(),
-                              ),
-                            );
+                            // Check if there are any scans before navigating
+                            if (_recentScans.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                      'No scan data available yet. Please complete an eye scan first.'),
+                                  duration: Duration(seconds: 3),
+                                  action: SnackBarAction(
+                                    label: 'Start Scan',
+                                    onPressed: () {
+                                      _onNavItemTapped(
+                                          2); // Navigate to scan screen
+                                    },
+                                  ),
+                                ),
+                              );
+                            } else {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const FullReportScreen(),
+                                ),
+                              );
+                            }
                           },
                         ),
                       ],

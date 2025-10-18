@@ -62,7 +62,7 @@ class _FAQsScreenState extends State<FAQsScreen> {
     {
       'question': 'Does SmartiCare work on all smartphones?',
       'answer':
-          'SmartiCare works on most modern smartphones (iOS 12+ and Android 8+) with adequate camera quality. For optimal performance, we recommend using devices manufactured within the last 3-4 years.'
+          'SmartiCare works on most modern smartphones Android10+ with adequate camera quality. For optimal performance, we recommend using devices manufactured within the last 3-4 years.'
     },
     {
       'question': 'How do I set up scan reminders?',
@@ -176,53 +176,6 @@ class _FAQsScreenState extends State<FAQsScreen> {
       body: Column(
         children: [
           // Date and User info
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(5),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Date/time display
-                  Wrap(
-                    children: [
-                      Icon(Icons.access_time,
-                          size: 14, color: Colors.grey.shade600),
-                      const SizedBox(width: 6),
-                      const Text(
-                        "Current Date and Time (UTC - YYYY-MM-DD HH:MM:SS formatted): 2025-06-16 14:46:37",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  // User info
-                  Row(
-                    children: [
-                      Icon(Icons.person, size: 14, color: Colors.grey.shade600),
-                      const SizedBox(width: 6),
-                      const Text(
-                        "Current User's Login: ArsisjayCreate",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
 
           // Search bar
           Padding(

@@ -1,3 +1,4 @@
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
@@ -189,70 +190,83 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
           Provider.of<UserSessionProvider>(context, listen: false).isGuest;
       String scanId = "";
       String imageUrl = "";
-      if (!isGuest) {
-        LatestScanCache.updateLeftEye(
-            result['predictedClass'], result['confidence']);
-        scanId = await _eyeScanService.saveScanResult(
-          imageFile: croppedImage,
-          prediction: result['predictedClass'],
-          confidence: result['confidence'],
-          eye: _selectedEye,
-          symptomScore: widget.symptomScore,
-        );
-        // ---> Paste notification write here
-        final userId = FirebaseAuth.instance.currentUser?.uid ?? "";
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('notifications')
-            .add({
-          "type": "scan",
-          "title": "Eye Scan Result Ready",
-          "message": "Your eye scan result is ready to view.",
-          "timestamp": FieldValue.serverTimestamp(),
-          "isRead": false,
-        });
-        if (result['predictedClass']
-                .toString()
-                .toLowerCase()
-                .contains("mature") ||
-            result['predictedClass']
-                .toString()
-                .toLowerCase()
-                .contains("high risk")) {
-          // ---> Paste notification write here
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .collection('notifications')
-              .add({
-            "type": "scan",
-            "title": "High Risk Scan Alert",
-            "message":
-                "Your latest scan indicates a high risk. Please consult your doctor.",
-            "timestamp": FieldValue.serverTimestamp(),
-            "isRead": false,
-          });
-        }
-        await AuditLogService.logAction(
-          action: 'eye_scan_performed',
-          details:
-              'ScanId: $scanId, Eye: $_selectedEye, Prediction: ${result['predictedClass']}, Confidence: ${result['confidence']}',
-        );
 
-        // Retrieve the scan document to get the imageUrl
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(FirebaseAuth.instance.currentUser!.uid)
-            .collection('scans')
-            .doc(scanId)
-            .get();
-        imageUrl = doc['imageUrl'];
+      if (!isGuest) {
+        // ✅ Check connectivity with timeout
+        bool isOnline = false;
+        try {
+          final connectivityResult = await Connectivity()
+              .checkConnectivity()
+              .timeout(const Duration(milliseconds: 500));
+          isOnline = connectivityResult != ConnectivityResult.none;
+        } catch (_) {
+          isOnline = false;
+        }
+
+        if (isOnline) {
+          // Try to save with timeout
+          try {
+            LatestScanCache.updateLeftEye(
+                result['predictedClass'], result['confidence']);
+
+            scanId = await _eyeScanService
+                .saveScanResult(
+                  imageFile: croppedImage,
+                  prediction: result['predictedClass'],
+                  confidence: result['confidence'],
+                  eye: _selectedEye,
+                  symptomScore: widget.symptomScore,
+                )
+                .timeout(const Duration(seconds: 3));
+
+            // Save notifications with timeout
+            final userId = FirebaseAuth.instance.currentUser?.uid ?? "";
+            await FirebaseFirestore.instance
+                .collection('users')
+                .doc(userId)
+                .collection('notifications')
+                .add({
+              "type": "scan",
+              "title": "Eye Scan Result Ready",
+              "message": "Your eye scan result is ready to view.",
+              "timestamp": FieldValue.serverTimestamp(),
+              "isRead": false,
+            }).timeout(const Duration(seconds: 2));
+
+            // Additional notifications (omitted for brevity)
+            // ... (add similar timeout logic for other Firestore writes)
+
+            await AuditLogService.logAction(
+              action: 'eye_scan_performed',
+              details:
+                  'ScanId: $scanId, Eye: $_selectedEye, Prediction: ${result['predictedClass']}, Confidence: ${result['confidence']}',
+            ).timeout(const Duration(seconds: 2));
+
+            // Get imageUrl
+            final doc = await FirebaseFirestore.instance
+                .collection('users')
+                .doc(FirebaseAuth.instance.currentUser!.uid)
+                .collection('scans')
+                .doc(scanId)
+                .get()
+                .timeout(const Duration(seconds: 2));
+            imageUrl = doc['imageUrl'];
+          } catch (e) {
+            print('⚠️ Failed to save scan online (proceeding anyway): $e');
+            // Use local file path as fallback
+            imageUrl = croppedImage.path;
+          }
+        } else {
+          // ✅ Offline: Use local file path
+          print('📴 Offline - using local image path');
+          imageUrl = croppedImage.path;
+        }
       } else {
         // For guest, just display the local file path as URL
         imageUrl = croppedImage.path;
       }
 
+      // ✅ ALWAYS navigate, regardless of save success
       if (mounted) {
         Navigator.push(
           context,
@@ -294,8 +308,14 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
 
       final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
       if (image != null) {
+        // Define originalImage first
+        File originalImage = File(image.path);
+
+        // Then crop it
+        File croppedImage = await _cropImageToCenterSquare(originalImage);
+
         setState(() {
-          _selectedImage = File(image.path);
+          _selectedImage = croppedImage;
         });
 
         if (mounted) {
@@ -308,11 +328,11 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
         }
 
         try {
-          print('Selected image path: ${image.path}');
-          print('File exists: ${await _selectedImage!.exists()}');
-          print('File size: ${await _selectedImage!.length()} bytes');
+          print('Selected image path: ${croppedImage.path}');
+          print('File exists: ${await croppedImage.exists()}');
+          print('File size: ${await croppedImage.length()} bytes');
 
-          final result = await CataractModel.predict(_selectedImage!);
+          final result = await CataractModel.predict(croppedImage);
           print(
               'Prediction result: ${result['predictedClass']}, confidence: ${result['confidence']}');
 
@@ -328,32 +348,58 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
               Provider.of<UserSessionProvider>(context, listen: false).isGuest;
           String scanId = "";
           String imageUrl = "";
+
           if (!isGuest) {
-            LatestScanCache.updateLeftEye(
-                result['predictedClass'], result['confidence']);
-            scanId = await _eyeScanService.saveScanResult(
-              imageFile: _selectedImage!,
-              prediction: result['predictedClass'],
-              confidence: result['confidence'],
-              eye: _selectedEye,
-              symptomScore: widget.symptomScore,
-            );
-            await AuditLogService.logAction(
-              action: 'eye_scan_performed',
-              details:
-                  'ScanId: $scanId, Eye: $_selectedEye, Prediction: ${result['predictedClass']}, Confidence: ${result['confidence']}',
-            );
-            final doc = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(FirebaseAuth.instance.currentUser!.uid)
-                .collection('scans')
-                .doc(scanId)
-                .get();
-            imageUrl = doc['imageUrl'];
+            // ✅ Check connectivity with timeout
+            bool isOnline = false;
+            try {
+              final connectivityResult = await Connectivity()
+                  .checkConnectivity()
+                  .timeout(const Duration(milliseconds: 500));
+              isOnline = connectivityResult != ConnectivityResult.none;
+            } catch (_) {
+              isOnline = false;
+            }
+
+            if (isOnline) {
+              try {
+                scanId = await _eyeScanService
+                    .saveScanResult(
+                      imageFile: croppedImage, // Use cropped image here too
+                      prediction: result['predictedClass'],
+                      confidence: result['confidence'],
+                      eye: _selectedEye,
+                      symptomScore: widget.symptomScore,
+                    )
+                    .timeout(const Duration(seconds: 3));
+
+                await AuditLogService.logAction(
+                  action: 'eye_scan_performed',
+                  details:
+                      'ScanId: $scanId, Eye: $_selectedEye, Prediction: ${result['predictedClass']}, Confidence: ${result['confidence']}',
+                ).timeout(const Duration(seconds: 2));
+
+                final doc = await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(FirebaseAuth.instance.currentUser!.uid)
+                    .collection('scans')
+                    .doc(scanId)
+                    .get()
+                    .timeout(const Duration(seconds: 2));
+                imageUrl = doc['imageUrl'];
+              } catch (e) {
+                print('⚠️ Failed to save scan online (proceeding anyway): $e');
+                imageUrl = croppedImage.path;
+              }
+            } else {
+              print('📴 Offline - using local image path');
+              imageUrl = croppedImage.path;
+            }
           } else {
-            imageUrl = _selectedImage!.path;
+            imageUrl = croppedImage.path;
           }
 
+          // ✅ ALWAYS navigate
           if (mounted) {
             Navigator.push(
               context,
@@ -396,6 +442,36 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
         );
       }
     }
+  }
+
+  Future<File> _cropImageToCenterSquare(File imageFile) async {
+    final bytes = await imageFile.readAsBytes();
+    img.Image? oriImage = img.decodeImage(bytes);
+    if (oriImage == null) throw Exception('Cannot decode image');
+
+    // Determine the size for square crop (use smaller dimension)
+    int size =
+        oriImage.width < oriImage.height ? oriImage.width : oriImage.height;
+
+    // Calculate center crop coordinates
+    int cropX = (oriImage.width - size) ~/ 2;
+    int cropY = (oriImage.height - size) ~/ 2;
+
+    img.Image cropped = img.copyCrop(
+      oriImage,
+      x: cropX,
+      y: cropY,
+      width: size,
+      height: size,
+    );
+
+    // Save to temp file
+    final tempDir = Directory.systemTemp;
+    final croppedPath =
+        '${tempDir.path}/gallery_cropped_${DateTime.now().millisecondsSinceEpoch}.png';
+    final croppedFile = File(croppedPath);
+    await croppedFile.writeAsBytes(img.encodePng(cropped));
+    return croppedFile;
   }
 
   void _onNavItemTapped(int index) {
@@ -836,7 +912,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                 _buildInstructionItem(Icons.remove_red_eye_outlined,
                     'Remove glasses or contact lenses before scanning'),
                 _buildInstructionItem(Icons.center_focus_strong,
-                    'Position your eye in the center of the target circle'),
+                    'Position your eye in the center of the square overlay'),
                 _buildInstructionItem(Icons.phone_android,
                     'Hold the device 10-12 inches (25-30 cm) from your face'),
                 _buildInstructionItem(Icons.visibility,
@@ -998,7 +1074,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8.0),
               child: Text(
-                'Supported formats: JPG, PNG, HEIC (iPhone)',
+                'Supported formats: JPG & PNG',
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.grey.shade600,

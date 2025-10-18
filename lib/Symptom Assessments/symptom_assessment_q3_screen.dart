@@ -143,6 +143,7 @@ class _SymptomAssessmentQ3ScreenState extends State<SymptomAssessmentQ3Screen> {
                     const SizedBox(height: 24),
 
                     // Image
+                    // Image container (overlay icon removed)
                     Container(
                       height: 180,
                       width: double.infinity,
@@ -150,16 +151,8 @@ class _SymptomAssessmentQ3ScreenState extends State<SymptomAssessmentQ3Screen> {
                         color: Colors.grey.shade200,
                         borderRadius: BorderRadius.circular(16),
                         image: const DecorationImage(
-                          image: AssetImage('assets/images/night_vision.png'),
+                          image: AssetImage('assets/images/night_vision.jpg'),
                           fit: BoxFit.cover,
-                        ),
-                      ),
-                      // Use this if you don't have the image
-                      child: Center(
-                        child: Icon(
-                          Icons.nightlight_round,
-                          size: 60,
-                          color: Colors.grey.shade500,
                         ),
                       ),
                     ),
@@ -252,9 +245,9 @@ class _SymptomAssessmentQ3ScreenState extends State<SymptomAssessmentQ3Screen> {
                           ),
                           SizedBox(width: 8),
                           Text(
-                            'Previous',
+                            'Back',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: 10,
                               fontWeight: FontWeight.w500,
                             ),
                           ),

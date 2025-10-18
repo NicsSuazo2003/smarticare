@@ -18,7 +18,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:connectivity_plus/connectivity_plus.dart'; // ✅ Add this
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'screens/complete_profile_screen.dart'; // added
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -31,7 +32,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 Future<void> saveTokenToFirestore(String uid) async {
   try {
-    // ✅ Check connectivity first
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult == ConnectivityResult.none) {
       print('⚠️ No internet, token save deferred');
@@ -97,18 +97,15 @@ Future<void> initializeLocalNotifications() async {
   );
 }
 
-// ✅ NEW: Enable Firestore offline persistence
 Future<void> enableFirestoreOfflineMode() async {
   try {
     if (!kIsWeb) {
-      // Enable offline persistence for mobile
       FirebaseFirestore.instance.settings = const Settings(
         persistenceEnabled: true,
         cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
       print('✅ Firestore offline mode enabled');
     } else {
-      // Enable persistence for web
       await FirebaseFirestore.instance.enablePersistence(
         const PersistenceSettings(synchronizeTabs: true),
       );
@@ -123,34 +120,28 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    // ✅ Initialize Firebase
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
     print('✅ Firebase initialized');
 
-    // ✅ Enable Firestore offline mode IMMEDIATELY after Firebase init
     await enableFirestoreOfflineMode();
 
-    // ✅ Initialize Timezone
     tz.initializeTimeZones();
     print('✅ Timezone initialized');
 
-    // ✅ Initialize Local Notifications
     await initializeLocalNotifications();
     print('✅ Local notifications initialized');
 
-    // ✅ Set up Firebase background message handler
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // ✅ Initialize Hive and open all boxes
     await Hive.initFlutter();
     Hive.registerAdapter(ReminderAdapter());
     await Hive.openBox<Reminder>('remindersBox');
     await Hive.openBox('clinicsBox');
-    await Hive.openBox('scansBox'); // ✅ NEW: For offline scan storage
-    await Hive.openBox('userProfileBox'); // ✅ NEW: For offline user data
-    await Hive.openBox('syncQueueBox'); // ✅ NEW: For pending uploads
+    await Hive.openBox('scansBox');
+    await Hive.openBox('userProfileBox');
+    await Hive.openBox('syncQueueBox');
     print('✅ Hive initialized with all boxes');
 
     runApp(
@@ -158,8 +149,7 @@ void main() async {
         providers: [
           ChangeNotifierProvider(create: (_) => SymptomAssessmentProvider()),
           ChangeNotifierProvider(create: (_) => UserSessionProvider()),
-          ChangeNotifierProvider(
-              create: (_) => ConnectivityProvider()), // ✅ NEW
+          ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         ],
         child: const MyApp(),
       ),
@@ -199,7 +189,6 @@ void main() async {
   }
 }
 
-// ✅ NEW: Connectivity Provider to track online/offline status
 class ConnectivityProvider extends ChangeNotifier {
   bool _isOnline = true;
   bool get isOnline => _isOnline;
@@ -213,7 +202,6 @@ class ConnectivityProvider extends ChangeNotifier {
     _isOnline = result != ConnectivityResult.none;
     notifyListeners();
 
-    // Listen for connectivity changes
     Connectivity().onConnectivityChanged.listen((result) {
       final wasOnline = _isOnline;
       _isOnline = result != ConnectivityResult.none;
@@ -229,15 +217,12 @@ class ConnectivityProvider extends ChangeNotifier {
     });
   }
 
-  // ✅ Sync data when coming back online
   Future<void> _syncPendingData() async {
     try {
       final syncQueue = await Hive.openBox('syncQueueBox');
       final pendingItems = syncQueue.values.toList();
 
       for (var item in pendingItems) {
-        // Sync each pending item to Firestore
-        // Implementation depends on your data structure
         print('Syncing: $item');
       }
 
@@ -259,6 +244,9 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   bool _isLoading = true;
   bool _hasSeenWelcome = false;
+  bool _isAuthenticated = false; // Track authentication state
+  bool _needsProfileCompletion =
+      false; // NEW: whether authenticated user needs profile
 
   @override
   void initState() {
@@ -296,6 +284,15 @@ class _MyAppState extends State<MyApp> {
     try {
       final prefs = await SharedPreferences.getInstance();
 
+      // CHECK AUTHENTICATION STATE FIRST
+      final user = FirebaseAuth.instance.currentUser;
+      final isAuthenticated = user != null;
+
+      // DEBUG LOGS
+      print('🔍 hasSeenWelcome: ${prefs.getBool('hasSeenWelcome')}');
+      print('🔍 Current User: ${user?.email ?? "No user"}');
+      print('🔍 isAuthenticated: $isAuthenticated');
+
       // Initialize default clinics
       final clinicBox = await Hive.openBox('clinicsBox');
       final clinics = clinicBox.get('clinics', defaultValue: []);
@@ -318,19 +315,39 @@ class _MyAppState extends State<MyApp> {
         print('✅ Default clinics initialized');
       }
 
-      // ✅ Only request permissions if online
       final connectivityResult = await Connectivity().checkConnectivity();
       if (connectivityResult != ConnectivityResult.none) {
         await requestNotificationPermission();
 
-        final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           await saveTokenToFirestore(user.uid);
         }
       }
 
+      // NEW: check for Firestore profile existence when authenticated
+      bool needsProfile = false;
+      if (isAuthenticated && user != null) {
+        try {
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+          if (!userDoc.exists) {
+            needsProfile = true;
+            print('ℹ️ Authenticated user requires profile completion');
+          } else {
+            needsProfile = false;
+          }
+        } catch (e) {
+          print('Error checking user profile existence: $e');
+          needsProfile = false;
+        }
+      }
+
       setState(() {
         _hasSeenWelcome = prefs.getBool('hasSeenWelcome') ?? false;
+        _isAuthenticated = isAuthenticated;
+        _needsProfileCompletion = needsProfile;
         _isLoading = false;
       });
     } catch (e) {
@@ -347,6 +364,47 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       _hasSeenWelcome = true;
     });
+  }
+
+  // Determine which home widget to show based on auth and profile completion
+  Widget _determineHomeWidget() {
+    // If authenticated and profile incomplete -> go to CompleteProfileScreen
+    if (_isAuthenticated) {
+      if (_needsProfileCompletion) {
+        final user = FirebaseAuth.instance.currentUser!;
+        final displayName = user.displayName ?? '';
+        String firstName = '';
+        String lastName = '';
+        if (displayName.isNotEmpty) {
+          final parts = displayName.split(' ');
+          firstName = parts.isNotEmpty ? parts.first : '';
+          lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+        }
+        return CompleteProfileScreen(
+          uid: user.uid,
+          email: user.email ?? '',
+          firstName: firstName,
+          lastName: lastName,
+        );
+      }
+
+      // otherwise show home
+      print('✅ User authenticated - showing HomeScreen');
+      return const HomeScreen();
+    } else {
+      if (!_hasSeenWelcome) {
+        print('📖 Showing WelcomeScreen');
+        return WelcomeScreen(
+          onSkip: () async {
+            await _markWelcomeSeen();
+            setState(() {});
+          },
+        );
+      } else {
+        print('🔐 Showing LoginScreen');
+        return const LoginScreen();
+      }
+    }
   }
 
   @override
@@ -367,10 +425,14 @@ class _MyAppState extends State<MyApp> {
                     color: const Color(0xFFFF6B6B).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Icon(
-                    Icons.remove_red_eye,
-                    size: 40,
-                    color: Color(0xFFFF6B6B),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset(
+                      'assets/images/icon.png',
+                      fit: BoxFit.cover,
+                      width: 80,
+                      height: 80,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -408,12 +470,10 @@ class _MyAppState extends State<MyApp> {
           elevation: 0,
         ),
       ),
-      // ✅ Add connectivity indicator at app level
       builder: (context, child) {
         return Stack(
           children: [
             child!,
-            // ✅ Show offline banner
             Consumer<ConnectivityProvider>(
               builder: (context, connectivity, _) {
                 if (!connectivity.isOnline) {
@@ -444,51 +504,32 @@ class _MyAppState extends State<MyApp> {
           ],
         );
       },
-      home: _hasSeenWelcome
-          ? const AuthWrapper()
-          : WelcomeScreen(
-              onSkip: () async {
-                await _markWelcomeSeen();
-                setState(() {});
-              },
-            ),
+      home: _determineHomeWidget(),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const HomeScreen(),
         '/personal': (context) => PersonalScreen(
-              onSkip: () => Navigator.pushReplacementNamed(context, '/home'),
-              onNext: () => Navigator.pushReplacementNamed(context, '/home'),
+              onSkip: (ctx) {
+                final user = FirebaseAuth.instance.currentUser;
+                Navigator.pushNamedAndRemoveUntil(
+                  ctx,
+                  user == null ? '/login' : '/home',
+                  (route) => false,
+                );
+              },
+              onNext: (ctx) {
+                final user = FirebaseAuth.instance.currentUser;
+                Navigator.pushNamedAndRemoveUntil(
+                  ctx,
+                  user == null ? '/login' : '/home',
+                  (route) => false,
+                );
+              },
             ),
       },
     );
   }
 }
 
-class AuthWrapper extends StatelessWidget {
-  const AuthWrapper({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
-          );
-        }
-
-        // ✅ Check local storage for offline access
-        if (snapshot.hasData && snapshot.data != null) {
-          return const HomeScreen();
-        } else {
-          // ✅ Allow guest mode for offline usage
-          return const LoginScreen();
-        }
-      },
-    );
-  }
-}
+// REMOVED AuthWrapper - no longer needed

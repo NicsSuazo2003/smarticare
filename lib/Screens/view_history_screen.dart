@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_1/Screens/full_report_screen.dart';
+import 'package:flutter_application_1/Screens/home_screen.dart';
+import 'package:flutter_application_1/Screens/profile_screen.dart';
+import 'package:flutter_application_1/Screens/progress_screen.dart';
+import 'package:flutter_application_1/Screens/reminder_screen.dart';
+import 'package:flutter_application_1/Screens/symptom_assessment_screen.dart';
 
 class ViewHistoryScreen extends StatefulWidget {
   const ViewHistoryScreen({super.key});
@@ -109,16 +114,56 @@ class _ViewHistoryScreenState extends State<ViewHistoryScreen> {
   }
 
   void _onNavItemTapped(int index) {
+    if (_selectedNavIndex == index) return; // Already on this tab
+
     setState(() {
       _selectedNavIndex = index;
     });
-    // You can implement actual navigation here
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Navigating to ${_getNavItemName(index)}'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
+
+    switch (index) {
+      case 0: // Home
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+          (route) => false,
+        );
+        break;
+      case 1: // Progress
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const ProgressScreen()),
+          (route) => false,
+        );
+        break;
+      case 2: // Eye Scan
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SymptomAssessmentScreen(
+              onStart: () {
+                Navigator.pop(context);
+              },
+            ),
+          ),
+        );
+        break;
+      case 3: // Reminders
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const ReminderScreen()),
+          (route) => false,
+        );
+        break;
+      case 4: // Profile
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const ProfileScreen()),
+          (route) => false,
+        );
+        break;
+      default:
+        break;
+    }
   }
 
   String _getNavItemName(int index) {

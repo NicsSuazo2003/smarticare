@@ -1,7 +1,7 @@
 plugins {
     id "com.android.application"
     // START: FlutterFire Configuration
-    id 'com.google.gms.google-services'
+    id "com.google.gms.google-services"
     // END: FlutterFire Configuration
     id "kotlin-android"
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
@@ -10,40 +10,71 @@ plugins {
 
 android {
     namespace = "com.example.flutter_application_1"
-    compileSdk = 36 
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
-           coreLibraryDesugaringEnabled true
-    }
-
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8
-    }
 
     defaultConfig {
         applicationId = "com.example.flutter_application_1"
         minSdkVersion = flutter.minSdkVersion
-        targetSdk = 36 
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // If you hit the 64K method limit and minSdk < 21, enable multidex:
+        // multiDexEnabled true
+    }
+
+    compileOptions {
+        // Use Java 17 for AGP 8.x compatibility
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        coreLibraryDesugaringEnabled true
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
     }
 
     buildTypes {
+        debug {
+            // No shrinking/obfuscation in debug
+            minifyEnabled false
+            shrinkResources false
+        }
         release {
+            // TODO: replace with your release keystore once ready
+            // For now this signs with the debug key so you can produce a build
             signingConfig = signingConfigs.debug
+
+            // Enable code shrinking/obfuscation and resource shrinking
+            minifyEnabled true
+            shrinkResources true
+
+            // R8/ProGuard rules (ensure android/app/proguard-rules.pro exists)
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-    
-}
-dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
-    // ... other dependencies ...
-    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+
+    // If you need to exclude duplicate META-INF resources, uncomment:
+    // packagingOptions {
+    //     resources {
+    //         excludes += ['META-INF/LICENSE*', 'META-INF/NOTICE*']
+    //     }
+    // }
 }
 
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+
+    // Fix R8 missing class: include TensorFlow Lite GPU delegate
+    // Match this version to the TF version used by tflite_flutter (^0.11.0 commonly aligns with 2.12.x)
+    implementation 'org.tensorflow:tensorflow-lite-gpu:2.12.0'
+    // If you use Select TF Ops, also add:
+    // implementation 'org.tensorflow:tensorflow-lite-select-tf-ops:2.12.0'
+
+    // Java 8+ API desugaring
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+}
 
 flutter {
     source = "../.."

@@ -105,6 +105,9 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
           ),
 
           // Privacy Policy Content
+          // Replace the entire privacy policy content section with this:
+
+// Privacy Policy Content
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -120,7 +123,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Last Updated: June 1, 2025',
+                    'Effective Date: October 1, 2025',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.grey.shade700,
@@ -138,8 +141,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'SmartiCare (“we”, “our”, “us”) is committed to protecting your privacy. This Privacy Policy describes how we collect, use, disclose, and safeguard your information when you use the SmartiCare mobile application (“App”).'
-                    '\n\nPlease read this Privacy Policy carefully. By using the Application, you agree to the collection and use of information in accordance with this policy. If you do not agree with our policies and practices, do not use our Application.',
+                    'SmartiCare respects the privacy of its users and is committed to protecting personal information. This Privacy Policy explains how the app collects, uses, and safeguards the data provided by users.',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -149,7 +151,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
 
                   // Information We Collect
                   const Text(
-                    'Information We Collect',
+                    '1. Information We Collect',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -157,7 +159,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'We collect several types of information from and about users of our Application, including:',
+                    'SmartiCare may collect the following information:',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -165,18 +167,16 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   _buildBulletItem(
-                      'Personal Information: Name, email address, gender, date of birth, and basic profile details used for account creation and personalization.'),
+                      'Personal details such as email address for account registration and verification.'),
                   _buildBulletItem(
-                      'Health Information: Eye scan results, symptom assessments, appointment and reminder details, and progress tracking data. These are stored securely and used to support your personal eye health monitoring.'),
+                      'Assessment results from symptom-based questionnaires and eye image analysis.'),
                   _buildBulletItem(
-                      'Technical Information: hnical details such as device type, operating system, and app version for support and security.'),
-                  _buildBulletItem(
-                      'Usage Data: Actions such as scan history, appointment creation, and reminder usage to improve user experience.'),
+                      'System-generated data such as timestamps and usage records stored securely in Firebase.'),
                   const SizedBox(height: 20),
 
-                  // How We Use Your Information
+                  // Purpose of Data Collection
                   const Text(
-                    'How We Use Your Information',
+                    '2. Purpose of Data Collection',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -184,7 +184,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'We may use the information we collect from you for various purposes, including:',
+                    'The information gathered is used to:',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -192,61 +192,25 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   _buildBulletItem(
-                      'Provide and improve our medical screening and health monitoring services'),
+                      'Generate pre-screening results and monitor cataract progression.'),
                   _buildBulletItem(
-                      'Analyze eye images and symptoms using AI and medical guidelines'),
+                      'Improve the accuracy and performance of the system.'),
                   _buildBulletItem(
-                      'Personalize your experience and recommendations'),
-                  _buildBulletItem(
-                      'Communicate important updates, results, or reminders'),
-                  _buildBulletItem(
-                      'Comply with legal, regulatory, and ethical obligations'),
-                  _buildBulletItem('To provide customer support'),
-                  _buildBulletItem(
-                      'Conduct anonymized research and analytics (you will never be personally identified in published results)'),
-                  _buildBulletItem('To monitor usage of our Application'),
-                  _buildBulletItem(
-                      'To detect, prevent, and address technical issues'),
-                  const SizedBox(height: 20),
-
-                  // Disclosure of Your Information
-                  const Text(
-                    'Disclosure of Your Information',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                      'Provide Barangay Health administrators with summary reports for health monitoring purposes.'),
                   const SizedBox(height: 10),
                   const Text(
-                    'We may disclose information that we collect in the following circumstances:',
+                    'SmartiCare does not provide a medical diagnosis. All outputs are for pre-screening and awareness only. Users are encouraged to consult an eye specialist for proper evaluation.',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
+                      fontStyle: FontStyle.italic,
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  _buildBulletItem('To our subsidiaries and affiliates'),
-                  _buildBulletItem(
-                      'To healthcare providers with your explicit consent'),
-                  _buildBulletItem(
-                      'To contractors, service providers, and other third parties we use to support our business'),
-                  _buildBulletItem(
-                      'To fulfill the purpose for which you provide it'),
-                  _buildBulletItem(
-                      'For any other purpose disclosed by us when you provide the information'),
-                  _buildBulletItem('With your consent'),
-                  _buildBulletItem(
-                      'To comply with any court order, law, or legal process'),
-                  _buildBulletItem(
-                      'To enforce our rights arising from any contracts entered into between you and us'),
-                  _buildBulletItem(
-                      'If we believe disclosure is necessary to protect the rights, property, or safety of our company, our customers, or others'),
                   const SizedBox(height: 20),
 
-                  // Data Security
+                  // Data Storage and Protection
                   const Text(
-                    'Data Security',
+                    '3. Data Storage and Protection',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -254,8 +218,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'We have implemented measures designed to secure your personal information from accidental loss and unauthorized access, use, alteration, and disclosure. All information you provide to us is stored on secure servers behind firewalls.'
-                    '\n\nThe safety and security of your information also depends on you. Where we have given you (or where you have chosen) a password for access to certain parts of our Application, you are responsible for keeping this password confidential.',
+                    'All collected data are securely stored in Firebase, with encryption and restricted access to authorized personnel only. No data will be shared with third parties without user consent. Offline data stored on the device is automatically synchronized once an internet connection is available.',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -263,9 +226,9 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Your Rights
+                  // User Rights
                   const Text(
-                    'Your Rights',
+                    '4. User Rights',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -273,7 +236,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'You have the right to:',
+                    'Users have the right to:',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -281,20 +244,16 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   _buildBulletItem(
-                      'Access and receive a copy of your personal data'),
+                      'Access their personal data and assessment history.'),
                   _buildBulletItem(
-                      'Rectify inaccurate or incomplete personal data'),
+                      'Request deletion of their account and data at any time.'),
                   _buildBulletItem(
-                      'Request the deletion of your personal data'),
-                  _buildBulletItem(
-                      'Object to the processing of your personal data'),
-                  _buildBulletItem(
-                      'Withdraw consent at any time where we relied on your consent to process your personal data'),
+                      'Refuse data collection by uninstalling the app.'),
                   const SizedBox(height: 20),
 
-                  // Changes to Our Privacy Policy
+                  // Policy Updates
                   const Text(
-                    'Changes to Our Privacy Policy',
+                    '5. Policy Updates',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -302,30 +261,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page and updating the "Last Updated" date at the top of this Privacy Policy.'
-                    '\n\nYou are advised to review this Privacy Policy periodically for any changes. Changes to this Privacy Policy are effective when they are posted on this page.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Contact Us
-                  const Text(
-                    'Contact Us',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'If you have any questions about this Privacy Policy, please contact us at:'
-                    '\n\nSmartiCare.'
-                    '\nEmail: privacy@smarticare.com'
-                    '\nPhone: 09071355012'
-                    '\nAddress: Brgy. Poblacion, Sta. Maria, Davao Occidental',
+                    'This Privacy Policy may be updated as the system improves. Any major changes will be communicated within the app.',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,

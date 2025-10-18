@@ -139,6 +139,7 @@ class _SymptomAssessmentQ1ScreenState extends State<SymptomAssessmentQ1Screen> {
                     const SizedBox(height: 24),
 
                     // Image
+                    // Image container (overlay icon removed)
                     Container(
                       height: 180,
                       width: double.infinity,
@@ -146,16 +147,8 @@ class _SymptomAssessmentQ1ScreenState extends State<SymptomAssessmentQ1Screen> {
                         color: Colors.grey.shade200,
                         borderRadius: BorderRadius.circular(16),
                         image: const DecorationImage(
-                          image: AssetImage('assets/images/blurry_vision.png'),
+                          image: AssetImage('assets/images/blurry_vision.jpg'),
                           fit: BoxFit.cover,
-                        ),
-                      ),
-                      // Use this if you don't have the image
-                      child: Center(
-                        child: Icon(
-                          Icons.blur_on,
-                          size: 60,
-                          color: Colors.grey.shade500,
                         ),
                       ),
                     ),
@@ -220,38 +213,38 @@ class _SymptomAssessmentQ1ScreenState extends State<SymptomAssessmentQ1Screen> {
             ),
 
             // Next button with navigation to Q2
+            // ✅ FIXED - Remove Previous button from Q1
             Padding(
               padding:
                   const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment:
+                    MainAxisAlignment.end, // ✅ Align Next button to right
                 children: [
+                  // ✅ NO Previous button - this is Question 1!
+
+                  // Next button
                   SizedBox(
                     width: 120,
                     height: 50,
                     child: ElevatedButton(
                       onPressed: _selectedAnswer != null
                           ? () {
-                              // Navigate to Question 2
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) =>
                                       SymptomAssessmentQ2Screen(
                                     onAnswer: (answer) {
-                                      // Store Q2 answer
                                       Provider.of<SymptomAssessmentProvider>(
                                               context,
                                               listen: false)
                                           .setAnswer('q2', answer);
                                     },
                                     onNext: () {
-                                      // Navigate to Q3 (to be implemented)
-                                      // For now, just navigate back
                                       Navigator.pop(context);
                                     },
                                     onPrevious: () {
-                                      // Go back to Q1
                                       Navigator.pop(context);
                                     },
                                   ),

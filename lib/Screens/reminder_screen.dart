@@ -123,7 +123,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
         "type": data["type"] ?? "",
         "title": data["title"] ?? "",
         "description": data["description"] ?? "",
-        "dateTime": (data["dateTime"] as Timestamp).toDate(),
+        "dateTime": (data["dateTime"] as Timestamp).toDate().toLocal(),
         "completed": data["completed"] ?? false,
         "repeat": data["repeat"] ?? "",
         "notification": data["notification"] ?? false,
@@ -168,6 +168,9 @@ class _ReminderScreenState extends State<ReminderScreen> {
                   'message':
                       'Reminder titled "${_reminders[index]["title"]}" deleted by user.',
                   'createdAt': FieldValue.serverTimestamp(),
+                  'timestamp':
+                      FieldValue.serverTimestamp(), // add this for future use
+
                   'read': false,
                   'relatedUserId': FirebaseAuth.instance.currentUser?.uid ?? "",
                   'reminderId': _reminders[index]["id"],
@@ -344,6 +347,9 @@ class _ReminderScreenState extends State<ReminderScreen> {
                             'message':
                                 'Reminder titled "${reminder["title"]}" marked as completed by user.',
                             'createdAt': FieldValue.serverTimestamp(),
+                            'timestamp': FieldValue
+                                .serverTimestamp(), // add this for future use
+
                             'read': false,
                             'relatedUserId':
                                 FirebaseAuth.instance.currentUser?.uid ?? "",
@@ -458,23 +464,20 @@ class _ReminderScreenState extends State<ReminderScreen> {
       _selectedNavIndex = index;
     });
 
-    // Navigation handling for each nav bar item
     switch (index) {
       case 0: // Home
-        Navigator.pushAndRemoveUntil(
+        Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
-          (route) => false,
         );
         break;
       case 1: // Progress
-        Navigator.pushAndRemoveUntil(
+        Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const ProgressScreen()),
-          (route) => false,
         );
         break;
-      case 2: // Eye Scan - Changed to navigate to SymptomAssessmentScreen
+      case 2: // Eye Scan
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -487,13 +490,12 @@ class _ReminderScreenState extends State<ReminderScreen> {
         );
         break;
       case 3: // Reminders
-        // Already on this screen
+        // Already on reminders screen
         break;
       case 4: // Profile
-        Navigator.pushAndRemoveUntil(
+        Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const ProfileScreen()),
-          (route) => false,
         );
         break;
     }
@@ -564,6 +566,8 @@ class _ReminderScreenState extends State<ReminderScreen> {
           'message':
               'Reminder titled "${newReminder["title"]}" created by user.',
           'createdAt': FieldValue.serverTimestamp(),
+          'timestamp': FieldValue.serverTimestamp(), // add this for future use
+
           'read': false,
           'relatedUserId': user.uid,
           'reminderId': docRef.id,
@@ -822,8 +826,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
                   _buildTab("Upcoming", 1),
                   const SizedBox(width: 18),
                   _buildTab("Completed", 2),
-                  const SizedBox(width: 18),
-                  _buildTab("Notifications", 3), // <-- Added Notifications tab
+                  // <-- Added Notifications tab
                 ],
               ),
             ),
@@ -1345,11 +1348,15 @@ class _NewReminderDialogState extends State<_NewReminderDialog> {
               size: 22,
             ),
             const SizedBox(width: 8),
-            Text(
-              value,
-              style: TextStyle(
-                color: Colors.grey.shade800,
-                fontWeight: FontWeight.w600,
+            // Wrap the label in Flexible so it can ellipsize if there's not enough space.
+            Flexible(
+              child: Text(
+                value,
+                style: TextStyle(
+                  color: Colors.grey.shade800,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
             Radio<String>(

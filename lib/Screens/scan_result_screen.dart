@@ -52,6 +52,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     return "High risk of symptoms";
   }
 
+  // Replace the existing _saveScanResultToFirestore() with this implementation.
   Future<void> _saveScanResultToFirestore() async {
     try {
       final isGuest =
@@ -90,12 +91,12 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         'userId': userId,
       };
 
-      // ✅ Check if online
+      // Check connectivity provider (existing app pattern)
       final connectivity =
           Provider.of<ConnectivityProvider>(context, listen: false);
 
       if (connectivity.isOnline) {
-        // Save directly to Firestore
+        // Save scan document
         await FirebaseFirestore.instance
             .collection('users')
             .doc(userId)
@@ -103,10 +104,67 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
             .doc(widget.scanId)
             .set(scanData, SetOptions(merge: true));
 
-        print('✅ Scan saved to Firestore');
+        // Create per-user notification (existing UX pattern)
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('notifications')
+            .add({
+          "type": "scan",
+          "title": "New Eye Scan Result",
+          "message":
+              "Your ${widget.eye.toLowerCase()} scan on ${widget.scanDate} completed. Result: ${widget.prediction}.",
+          "timestamp": FieldValue.serverTimestamp(),
+          "isRead": false,
+        });
+
+        // If the scan indicates potential cataract / non-normal result, notify admins
+        final String predLower = widget.prediction.toLowerCase();
+        final bool isCataract =
+            !predLower.contains('normal') && !predLower.contains('no cataract');
+
+        if (isCataract || riskLevel == 'High' || riskLevel == 'Medium') {
+          // Build a helpful admin message and priority
+          final String adminMessage =
+              'Scan (${widget.scanId}) for user $userId on ${widget.scanDate} indicates ${widget.prediction} (risk: $riskLevel).';
+          final String priority = (riskLevel == 'High') ? 'High' : 'Medium';
+
+          await FirebaseFirestore.instance
+              .collection('admin_notifications')
+              .add({
+            'type': 'scan_alert',
+            'title': 'Potential Cataract Detected',
+            'message': adminMessage,
+            'priority': priority,
+            'createdAt': FieldValue.serverTimestamp(),
+            'timestamp':
+                FieldValue.serverTimestamp(), // duplicate for compatibility
+            'isRead': false, // use isRead to match notification_screen filters
+            'relatedUserId': userId,
+            'scanId': widget.scanId,
+          });
+        }
+
+        print('✅ Scan saved to Firestore and notifications created if needed');
       } else {
-        // Save offline and queue for sync
+        // Offline: save scan for later sync (existing offline behavior)
         await OfflineSyncService().saveScanOffline(scanData);
+
+        // Also optionally create a local user notification entry (will sync later)
+        // This uses the same pattern as the online path but may require the sync service
+        // to propagate notifications upstream when online.
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('notifications')
+            .add({
+          "type": "scan",
+          "title": "Scan saved offline",
+          "message":
+              "Your ${widget.eye.toLowerCase()} scan on ${widget.scanDate} was saved offline and will be processed when online.",
+          "timestamp": FieldValue.serverTimestamp(),
+          "isRead": false,
+        });
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -675,144 +733,6 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                           ),
                           const SizedBox(height: 16),
                           _buildTipsSection(widget.prediction),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.shade200,
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Cataract Development',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  children: [
-                                    Container(
-                                      height: 8,
-                                      decoration: BoxDecoration(
-                                        color:
-                                            isNormal ? successColor : failColor,
-                                        borderRadius: const BorderRadius.only(
-                                          topLeft: Radius.circular(4),
-                                          bottomLeft: Radius.circular(4),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Container(
-                                      padding: const EdgeInsets.all(2),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            isNormal ? successColor : failColor,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        isNormal
-                                            ? Icons.check
-                                            : Icons.warning_amber_rounded,
-                                        color: Colors.white,
-                                        size: 16,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Normal',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color:
-                                            isNormal ? successColor : failColor,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.shade200,
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Progress Tracking',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Comparing with previous scans',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Container(
-                            height: 140,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.insert_chart_outlined,
-                                    size: 40,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    'No previous scans to compare',
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     ),

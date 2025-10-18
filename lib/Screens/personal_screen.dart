@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 class PersonalScreen extends StatefulWidget {
-  final VoidCallback onSkip;
-  final VoidCallback onNext;
+  final void Function(BuildContext) onSkip;
+  final void Function(BuildContext) onNext;
 
   const PersonalScreen({
     super.key,
@@ -81,7 +81,7 @@ class _PersonalScreenState extends State<PersonalScreen>
                 Align(
                   alignment: Alignment.topRight,
                   child: TextButton(
-                    onPressed: widget.onSkip,
+                    onPressed: () => widget.onSkip(context),
                     style: TextButton.styleFrom(
                       foregroundColor: Colors.grey.shade700,
                     ),
@@ -228,7 +228,7 @@ class _PersonalScreenState extends State<PersonalScreen>
                     width: double.infinity,
                     height: 58,
                     child: ElevatedButton(
-                      onPressed: widget.onNext,
+                      onPressed: () => widget.onNext(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
                         foregroundColor: const Color.fromRGBO(255, 255, 255, 1),
