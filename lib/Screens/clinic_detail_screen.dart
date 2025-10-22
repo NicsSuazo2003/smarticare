@@ -66,11 +66,6 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
     final BorderRadius cardRadius = BorderRadius.circular(18);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Clinic Detail"),
-        backgroundColor: primaryColor,
-        elevation: 0,
-      ),
       backgroundColor: Colors.grey.shade50,
       body: FutureBuilder<DocumentSnapshot>(
         future: FirebaseFirestore.instance
@@ -89,56 +84,102 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
               .toString()
               .trim();
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Clinic Header Card
-                Card(
-                  elevation: cardElevation,
-                  shape: RoundedRectangleBorder(borderRadius: cardRadius),
-                  child: Padding(
-                    padding: const EdgeInsets.all(22.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        CircleAvatar(
-                          radius: 32,
-                          backgroundColor: primaryColor.withOpacity(0.1),
-                          child: Icon(Icons.local_hospital,
-                              color: primaryColor, size: 40),
-                        ),
-                        const SizedBox(width: 20),
-                        Expanded(
+          return CustomScrollView(
+            slivers: [
+              // Modern App Bar with gradient
+              SliverAppBar(
+                expandedHeight: 120,
+                floating: false,
+                pinned: true,
+                backgroundColor: primaryColor,
+                flexibleSpace: FlexibleSpaceBar(
+                  title: Text(
+                    'Clinic Details',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 20,
+                    ),
+                  ),
+                  background: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          primaryColor,
+                          primaryColor.withOpacity(0.8),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Content
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Clinic Header Card
+                      Card(
+                        elevation: cardElevation,
+                        shape: RoundedRectangleBorder(borderRadius: cardRadius),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20.0),
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                clinic["name"] ?? "",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 24,
-                                  color: Colors.grey.shade900,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 8),
                               Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Icon(Icons.location_on,
-                                      color: Colors.red, size: 21),
-                                  const SizedBox(width: 5),
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: primaryColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Icon(
+                                      Icons.local_hospital,
+                                      color: primaryColor,
+                                      size: 40,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
                                   Expanded(
-                                    child: Text(
-                                      clinic["address"] ?? "",
-                                      style: TextStyle(
-                                        color: Colors.grey.shade800,
-                                        fontSize: 16,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          clinic["name"] ?? "",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 22,
+                                            color: Colors.grey.shade900,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.location_on,
+                                              color: Colors.red,
+                                              size: 18,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Expanded(
+                                              child: Text(
+                                                clinic["address"] ?? "",
+                                                style: TextStyle(
+                                                  color: Colors.grey.shade700,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
@@ -146,179 +187,285 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Info Row Card (distance + hours only — phone moved to Phone card below)
-                Card(
-                  elevation: cardElevation,
-                  shape: RoundedRectangleBorder(borderRadius: cardRadius),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 18.0, vertical: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: _iconInfo(
-                            icon: Icons.directions_walk,
-                            color: primaryColor,
-                            label: clinic["distance"] ?? "N/A",
-                          ),
-                        ),
-                        // keep a visual separation but don't duplicate phone info here
-                        Expanded(
-                          child: _iconInfo(
-                            icon: Icons.access_time,
-                            color: Colors.orange.shade700,
-                            label: clinic["hours"] ?? "N/A",
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Doctor In Charge Card
-                if ((clinic["doctorInCharge"] ?? "").isNotEmpty)
-                  Card(
-                    elevation: cardElevation,
-                    shape: RoundedRectangleBorder(borderRadius: cardRadius),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: primaryColor.withOpacity(0.1),
-                        child:
-                            const Icon(Icons.person, color: Color(0xFFFF6B6B)),
                       ),
-                      title: const Text("Doctor In Charge",
-                          style: TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(
-                        clinic["doctorInCharge"],
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey.shade900,
-                        ),
-                      ),
-                    ),
-                  ),
-                if ((clinic["doctorInCharge"] ?? "").isNotEmpty)
-                  const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                // About Clinic Card
-                Card(
-                  elevation: cardElevation,
-                  shape: RoundedRectangleBorder(borderRadius: cardRadius),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "About Clinic",
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                            color: Colors.grey.shade800,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          (clinic["about"] ?? "").isNotEmpty
-                              ? clinic["about"]
-                              : "No description available.",
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // Phone display + copy button (kept separate — this is the canonical phone entry)
-                const SizedBox(height: 22),
-                Card(
-                  elevation: cardElevation,
-                  shape: RoundedRectangleBorder(borderRadius: cardRadius),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: primaryColor.withOpacity(0.08),
-                      child: Icon(Icons.phone, color: primaryColor),
-                    ),
-                    title: const Text(
-                      "Phone",
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: phone.isNotEmpty
-                        ? SelectableText(
-                            phone,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey.shade900,
-                            ),
-                          )
-                        : Text(
-                            "No phone number available",
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-                    trailing: phone.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.copy),
-                            onPressed: () {
-                              Clipboard.setData(ClipboardData(text: phone));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content:
-                                      Text("Phone number copied to clipboard"),
-                                  duration: Duration(seconds: 2),
+                      // Quick Info Grid
+                      Row(
+                        children: [
+                          // Distance Card
+                          Expanded(
+                            child: Card(
+                              elevation: cardElevation,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: cardRadius),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: primaryColor.withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.directions_walk,
+                                        color: primaryColor,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Distance',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      clinic["distance"] ?? "N/A",
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: primaryColor,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
                                 ),
-                              );
-                            },
-                          )
-                        : null,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+
+                          // Hours Card
+                          Expanded(
+                            child: Card(
+                              elevation: cardElevation,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: cardRadius),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        Icons.access_time,
+                                        color: Colors.orange.shade700,
+                                        size: 24,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Hours',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      clinic["hours"] ?? "N/A",
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.orange.shade700,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Phone Card
+                      Card(
+                        elevation: cardElevation,
+                        shape: RoundedRectangleBorder(borderRadius: cardRadius),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 8,
+                          ),
+                          leading: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: primaryColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(Icons.phone, color: primaryColor),
+                          ),
+                          title: const Text(
+                            "Phone",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          subtitle: phone.isNotEmpty
+                              ? SelectableText(
+                                  phone,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey.shade900,
+                                  ),
+                                )
+                              : Text(
+                                  "No phone number available",
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                          trailing: phone.isNotEmpty
+                              ? Container(
+                                  decoration: BoxDecoration(
+                                    color: primaryColor.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: IconButton(
+                                    icon: Icon(Icons.copy, color: primaryColor),
+                                    onPressed: () {
+                                      Clipboard.setData(
+                                          ClipboardData(text: phone));
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Row(
+                                            children: [
+                                              Icon(Icons.check_circle,
+                                                  color: Colors.white),
+                                              SizedBox(width: 12),
+                                              Text("Phone number copied!"),
+                                            ],
+                                          ),
+                                          backgroundColor: Colors.green,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                )
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Doctor In Charge Card
+                      if ((clinic["doctorInCharge"] ?? "").isNotEmpty)
+                        Card(
+                          elevation: cardElevation,
+                          shape:
+                              RoundedRectangleBorder(borderRadius: cardRadius),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 8,
+                            ),
+                            leading: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: primaryColor.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(Icons.person, color: primaryColor),
+                            ),
+                            title: const Text(
+                              "Doctor In Charge",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                            subtitle: Text(
+                              clinic["doctorInCharge"],
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey.shade900,
+                              ),
+                            ),
+                          ),
+                        ),
+                      if ((clinic["doctorInCharge"] ?? "").isNotEmpty)
+                        const SizedBox(height: 16),
+
+                      // About Clinic Card
+                      Card(
+                        elevation: cardElevation,
+                        shape: RoundedRectangleBorder(borderRadius: cardRadius),
+                        child: Padding(
+                          padding: const EdgeInsets.all(20.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: primaryColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      Icons.info_outline,
+                                      color: primaryColor,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    "About Clinic",
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                (clinic["about"] ?? "").isNotEmpty
+                                    ? clinic["about"]
+                                    : "No description available.",
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  color: Colors.grey.shade700,
+                                  height: 1.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),
       bottomNavigationBar: _buildBottomNavigationBar(primaryColor),
-    );
-  }
-
-  Widget _iconInfo(
-      {required IconData icon, required Color color, required String label}) {
-    return Row(
-      children: [
-        Icon(icon, color: color, size: 22),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: color,
-            fontSize: 15,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _verticalDivider() {
-    return Container(
-      height: 28,
-      width: 1.2,
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      color: Colors.grey.shade200,
     );
   }
 

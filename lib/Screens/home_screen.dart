@@ -328,22 +328,25 @@ class _HomeScreenState extends State<HomeScreen> {
           final data = doc.data();
 
           final prediction = data['prediction'] as String? ?? '';
-          final double healthScore = data['healthScore'] as double? ??
-              data['confidence'] as double? ??
-              0.0;
+          // ✅ healthScore is already 0-100 from scoring service
+          final double healthScore = data['healthScore'] as double? ?? 0.0;
 
-          print(
-              "LEFT EYE - Prediction: $prediction, HealthScore: $healthScore");
+// ✅ If healthScore is missing, fall back to confidence (which IS 0-1)
+          final double fallbackScore = data['confidence'] as double? ?? 0.0;
+          final double finalScore =
+              healthScore > 0 ? healthScore : (fallbackScore * 100);
+
+          print("LEFT EYE - Prediction: $prediction, HealthScore: $finalScore");
 
           final bool isNormal = prediction.toLowerCase().contains('normal') ||
               prediction.toLowerCase() == "no cataract";
 
           leftEyeData = {
             'status': isNormal ? 'Normal' : 'Immature',
-            'score': (healthScore * 100).round(),
+            'score':
+                finalScore.round().clamp(0, 100), // ✅ Already 0-100, just clamp
             'stage': isNormal ? 'No Cataract' : 'Initial Stage'
           };
-
           // Update cache with fresh data
           LatestScanCache.updateLeftEye(prediction, healthScore);
           fetchSuccessful = true;
@@ -364,19 +367,24 @@ class _HomeScreenState extends State<HomeScreen> {
           final data = doc.data();
 
           final prediction = data['prediction'] as String? ?? '';
-          final double healthScore = data['healthScore'] as double? ??
-              data['confidence'] as double? ??
-              0.0;
+          // ✅ healthScore is already 0-100 from scoring service
+          final double healthScore = data['healthScore'] as double? ?? 0.0;
+
+// ✅ If healthScore is missing, fall back to confidence (which IS 0-1)
+          final double fallbackScore = data['confidence'] as double? ?? 0.0;
+          final double finalScore =
+              healthScore > 0 ? healthScore : (fallbackScore * 100);
 
           print(
-              "RIGHT EYE - Prediction: $prediction, HealthScore: $healthScore");
+              "RIGHT EYE - Prediction: $prediction, HealthScore: $finalScore");
 
           final bool isNormal = prediction.toLowerCase().contains('normal') ||
               prediction.toLowerCase() == "no cataract";
 
           rightEyeData = {
             'status': isNormal ? 'Normal' : 'Immature',
-            'score': (healthScore * 100).round(),
+            'score':
+                finalScore.round().clamp(0, 100), // ✅ Already 0-100, just clamp
             'stage': isNormal ? 'No Cataract' : 'Initial Stage'
           };
 
@@ -552,6 +560,111 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // Helper method for score range tooltip
+  Widget _buildScoreRangeTooltip({
+    required Color color,
+    required String range,
+    required String label,
+    required String description,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          margin: EdgeInsets.only(top: 4),
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    range,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: color,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 2),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+// Helper method for eye status example
+  Widget _buildEyeStatusExample({
+    required Color color,
+    required String status,
+    required String description,
+    required IconData icon,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                status,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: color,
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFFFF6B6B);
@@ -671,7 +784,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      "Monitor your eye health and detect cataract early",
+                      "Monitor your eye health and detect cataract",
                       style: TextStyle(
                         fontSize: 15,
                         color: Colors.grey.shade700,
@@ -681,6 +794,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
+              // Eye Health Score Card
               // Eye Health Score Card
               Padding(
                 padding: const EdgeInsets.all(20),
@@ -723,32 +837,210 @@ class _HomeScreenState extends State<HomeScreen> {
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  // Health Status
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        getEyeHealthStatusTitle(),
-                                        style: const TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      SizedBox(
-                                        width: size.width * 0.6,
-                                        child: Text(
-                                          "Your overall eye health score is based on the combined analysis of both eyes.",
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            color:
-                                                Colors.white.withOpacity(0.8),
+                                  // Health Status with tooltip
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Text(
+                                                    getEyeHealthStatusTitle(),
+                                                    style: const TextStyle(
+                                                      fontSize: 22,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  // ✅ NEW: Tooltip icon
+                                                  InkWell(
+                                                    onTap: () {
+                                                      showDialog(
+                                                        context: context,
+                                                        builder: (context) =>
+                                                            AlertDialog(
+                                                          title: Row(
+                                                            children: [
+                                                              Icon(
+                                                                  Icons
+                                                                      .info_outline,
+                                                                  color: Colors
+                                                                      .blue
+                                                                      .shade700),
+                                                              SizedBox(
+                                                                  width: 12),
+                                                              Text(
+                                                                  'Overall Health Score'),
+                                                            ],
+                                                          ),
+                                                          content:
+                                                              SingleChildScrollView(
+                                                            child: Column(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              mainAxisSize:
+                                                                  MainAxisSize
+                                                                      .min,
+                                                              children: [
+                                                                Text(
+                                                                  'What does this score mean?',
+                                                                  style: TextStyle(
+                                                                      fontWeight:
+                                                                          FontWeight
+                                                                              .bold,
+                                                                      fontSize:
+                                                                          16),
+                                                                ),
+                                                                SizedBox(
+                                                                    height: 8),
+                                                                Text(
+                                                                  'Your Overall Health Score is the average of both eyes\' health scores.',
+                                                                  style: TextStyle(
+                                                                      height:
+                                                                          1.5),
+                                                                ),
+                                                                SizedBox(
+                                                                    height: 16),
+                                                                _buildScoreRangeTooltip(
+                                                                  color: Colors
+                                                                      .green,
+                                                                  range:
+                                                                      '80-100%',
+                                                                  label:
+                                                                      'Healthy',
+                                                                  description:
+                                                                      'Both eyes are in excellent condition',
+                                                                ),
+                                                                SizedBox(
+                                                                    height: 12),
+                                                                _buildScoreRangeTooltip(
+                                                                  color: Colors
+                                                                      .orange,
+                                                                  range:
+                                                                      '60-79%',
+                                                                  label:
+                                                                      'Monitor',
+                                                                  description:
+                                                                      'Early signs detected. Schedule follow-up',
+                                                                ),
+                                                                SizedBox(
+                                                                    height: 12),
+                                                                _buildScoreRangeTooltip(
+                                                                  color: Colors
+                                                                      .red,
+                                                                  range:
+                                                                      'Below 60%',
+                                                                  label:
+                                                                      'Attention Needed',
+                                                                  description:
+                                                                      'Cataract detected. Consult specialist',
+                                                                ),
+                                                                SizedBox(
+                                                                    height: 16),
+                                                                Container(
+                                                                  padding:
+                                                                      EdgeInsets
+                                                                          .all(
+                                                                              12),
+                                                                  decoration:
+                                                                      BoxDecoration(
+                                                                    color: Colors
+                                                                        .blue
+                                                                        .shade50,
+                                                                    borderRadius:
+                                                                        BorderRadius
+                                                                            .circular(8),
+                                                                  ),
+                                                                  child: Row(
+                                                                    crossAxisAlignment:
+                                                                        CrossAxisAlignment
+                                                                            .start,
+                                                                    children: [
+                                                                      Icon(
+                                                                          Icons
+                                                                              .tips_and_updates,
+                                                                          color: Colors
+                                                                              .blue
+                                                                              .shade700,
+                                                                          size:
+                                                                              20),
+                                                                      SizedBox(
+                                                                          width:
+                                                                              8),
+                                                                      Expanded(
+                                                                        child:
+                                                                            Text(
+                                                                          'The score combines AI analysis and your symptom assessment for accuracy.',
+                                                                          style:
+                                                                              TextStyle(
+                                                                            fontSize:
+                                                                                13,
+                                                                            color:
+                                                                                Colors.blue.shade900,
+                                                                            height:
+                                                                                1.4,
+                                                                          ),
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                          actions: [
+                                                            TextButton(
+                                                              onPressed: () =>
+                                                                  Navigator.pop(
+                                                                      context),
+                                                              child: Text(
+                                                                  'Got It'),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      );
+                                                    },
+                                                    child: Container(
+                                                      padding:
+                                                          EdgeInsets.all(4),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.white
+                                                            .withOpacity(0.2),
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      child: Icon(
+                                                        Icons.help_outline,
+                                                        color: Colors.white,
+                                                        size: 18,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 6),
+                                              SizedBox(
+                                                width: size.width * 0.6,
+                                                child: Text(
+                                                  "Your overall eye health score is based on the combined analysis of both eyes.",
+                                                  style: TextStyle(
+                                                    fontSize: 14,
+                                                    color: Colors.white
+                                                        .withOpacity(0.8),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                   // Score Circle
                                   Container(
@@ -779,17 +1071,145 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // Your Eye Health Section
               // Your Eye Health Section
+              // Your Eye Health Section
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      "Your Eye Health",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    // ✅ NEW: Title with tooltip
+                    Row(
+                      children: [
+                        const Text(
+                          "Your Eye Health",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        InkWell(
+                          onTap: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: Row(
+                                  children: [
+                                    Icon(Icons.remove_red_eye,
+                                        color: Colors.blue.shade700),
+                                    SizedBox(width: 12),
+                                    Text('Individual Eye Health'),
+                                  ],
+                                ),
+                                content: SingleChildScrollView(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        'Understanding Your Eye Health Cards',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16),
+                                      ),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'Each card shows the health status of one eye based on your most recent scan.',
+                                        style: TextStyle(height: 1.5),
+                                      ),
+                                      SizedBox(height: 16),
+                                      _buildEyeStatusExample(
+                                        color: Colors.green,
+                                        status: 'Normal',
+                                        description:
+                                            'No signs of cataract detected',
+                                        icon: Icons.check_circle,
+                                      ),
+                                      SizedBox(height: 12),
+                                      _buildEyeStatusExample(
+                                        color: Colors.amber,
+                                        status: 'Immature',
+                                        description:
+                                            'Early stage cataract detected',
+                                        icon: Icons.warning_amber,
+                                      ),
+                                      SizedBox(height: 12),
+                                      _buildEyeStatusExample(
+                                        color: Colors.grey,
+                                        status: 'Unknown',
+                                        description:
+                                            'No scan data available yet',
+                                        icon: Icons.help_outline,
+                                      ),
+                                      SizedBox(height: 16),
+                                      Text(
+                                        'What is the percentage bar?',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15),
+                                      ),
+                                      SizedBox(height: 8),
+                                      Text(
+                                        'The percentage shows your eye health score (0-100%). Higher scores mean better eye health.',
+                                        style: TextStyle(
+                                            height: 1.5, fontSize: 14),
+                                      ),
+                                      SizedBox(height: 16),
+                                      Container(
+                                        padding: EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.shade50,
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Icon(Icons.info_outline,
+                                                color: Colors.blue.shade700,
+                                                size: 20),
+                                            SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'Left and Right eyes are tracked separately for accurate monitoring.',
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.blue.shade900,
+                                                  height: 1.4,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: Text('Got It'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.info_outline,
+                              color: Colors.blue.shade700,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
 
@@ -881,11 +1301,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                         child: LayoutBuilder(
                                           builder: (context, constraints) {
+                                            // ✅ Clamp to prevent overflow
                                             double leftPercent =
-                                                (_eyeHealthData['leftEye']
-                                                            ['score'] ??
-                                                        0) /
-                                                    100.0;
+                                                ((_eyeHealthData['leftEye']
+                                                                ['score'] ??
+                                                            0) /
+                                                        100.0)
+                                                    .clamp(0.0, 1.0);
                                             double leftBarWidth =
                                                 constraints.maxWidth *
                                                     leftPercent;
@@ -1008,10 +1430,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                         child: LayoutBuilder(
                                           builder: (context, constraints) {
                                             double rightPercent =
-                                                (_eyeHealthData['rightEye']
-                                                            ['score'] ??
-                                                        0) /
-                                                    100.0;
+                                                ((_eyeHealthData['rightEye']
+                                                                ['score'] ??
+                                                            0) /
+                                                        100.0)
+                                                    .clamp(0.0, 1.0);
                                             double rightBarWidth =
                                                 constraints.maxWidth *
                                                     rightPercent;
@@ -1346,7 +1769,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         _buildQuickAction(
                           icon: Icons.calendar_today,
                           color: Colors.green,
-                          label: "Appointments",
+                          label: "Referral",
                           onTap: () {
                             Navigator.push(
                               context,

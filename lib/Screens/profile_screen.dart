@@ -97,8 +97,20 @@ void _updatePassword(BuildContext context) {
   final TextEditingController currentPasswordController =
       TextEditingController();
   final TextEditingController newPasswordController = TextEditingController();
+  final TextEditingController confirmPasswordController =
+      TextEditingController();
+
   bool obscureCurrent = true;
   bool obscureNew = true;
+  bool obscureConfirm = true;
+
+  // Strong password validation regex
+  bool isStrongPassword(String password) {
+    // At least 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
+    final regex =
+        RegExp(r'^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[!@#\$&*~]).{8,}$');
+    return regex.hasMatch(password);
+  }
 
   showDialog(
     context: context,
@@ -110,12 +122,12 @@ void _updatePassword(BuildContext context) {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // ✅ CURRENT PASSWORD REQUIRED
+                // Current Password
                 TextField(
                   controller: currentPasswordController,
                   obscureText: obscureCurrent,
                   decoration: InputDecoration(
-                    labelText: 'Current Password',
+                    labelText: 'Current Password *',
                     suffixIcon: IconButton(
                       icon: Icon(obscureCurrent
                           ? Icons.visibility_off
@@ -126,22 +138,89 @@ void _updatePassword(BuildContext context) {
                   ),
                 ),
                 const SizedBox(height: 16),
+
+                // New Password
                 TextField(
                   controller: newPasswordController,
                   obscureText: obscureNew,
                   decoration: InputDecoration(
-                    labelText: 'New Password',
+                    labelText: 'New Password *',
                     suffixIcon: IconButton(
                       icon: Icon(
                           obscureNew ? Icons.visibility_off : Icons.visibility),
                       onPressed: () => setState(() => obscureNew = !obscureNew),
                     ),
                   ),
+                  onChanged: (value) {
+                    setState(() {}); // Update UI for password strength
+                  },
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Password must be at least 8 characters',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+
+                // Password Strength Indicator
+                if (newPasswordController.text.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _buildPasswordStrengthIndicator(newPasswordController.text),
+                ],
+
+                const SizedBox(height: 16),
+
+                // Confirm New Password
+                TextField(
+                  controller: confirmPasswordController,
+                  obscureText: obscureConfirm,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm New Password *',
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureConfirm
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () =>
+                          setState(() => obscureConfirm = !obscureConfirm),
+                    ),
+                  ),
+                ),
+
+                // Password Requirements
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Password must contain:',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      _buildRequirement('At least 8 characters',
+                          newPasswordController.text.length >= 8),
+                      _buildRequirement(
+                          'One uppercase letter (A-Z)',
+                          newPasswordController.text
+                              .contains(RegExp(r'[A-Z]'))),
+                      _buildRequirement(
+                          'One lowercase letter (a-z)',
+                          newPasswordController.text
+                              .contains(RegExp(r'[a-z]'))),
+                      _buildRequirement(
+                          'One number (0-9)',
+                          newPasswordController.text
+                              .contains(RegExp(r'[0-9]'))),
+                      _buildRequirement(
+                          'One special character (!@#\$&*~)',
+                          newPasswordController.text
+                              .contains(RegExp(r'[!@#\$&*~]'))),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -154,19 +233,40 @@ void _updatePassword(BuildContext context) {
                 onPressed: () async {
                   final currentPassword = currentPasswordController.text.trim();
                   final newPassword = newPasswordController.text.trim();
+                  final confirmPassword = confirmPasswordController.text.trim();
 
-                  if (currentPassword.isEmpty || newPassword.isEmpty) {
+                  // Validation
+                  if (currentPassword.isEmpty ||
+                      newPassword.isEmpty ||
+                      confirmPassword.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Please fill all fields')),
                     );
                     return;
                   }
 
-                  if (newPassword.length < 8) {
+                  if (newPassword != confirmPassword) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('New passwords do not match')),
+                    );
+                    return;
+                  }
+
+                  if (!isStrongPassword(newPassword)) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                           content:
-                              Text('Password must be at least 8 characters')),
+                              Text('Please meet all password requirements')),
+                    );
+                    return;
+                  }
+
+                  if (currentPassword == newPassword) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text(
+                              'New password must be different from current password')),
                     );
                     return;
                   }
@@ -177,7 +277,7 @@ void _updatePassword(BuildContext context) {
                       throw Exception('No user logged in');
                     }
 
-                    // ✅ RE-AUTHENTICATE FIRST
+                    // Re-authenticate first
                     final credential = EmailAuthProvider.credential(
                       email: user.email!,
                       password: currentPassword,
@@ -185,14 +285,16 @@ void _updatePassword(BuildContext context) {
 
                     await user.reauthenticateWithCredential(credential);
 
-                    // ✅ NOW UPDATE PASSWORD
+                    // Update password
                     await user.updatePassword(newPassword);
 
+                    // Log the action
                     await AuditLogService.logAction(
                       action: 'password_changed',
                       details: 'User changed their password.',
                     );
 
+                    // Admin notification
                     await FirebaseFirestore.instance
                         .collection('admin_notifications')
                         .add({
@@ -203,10 +305,10 @@ void _updatePassword(BuildContext context) {
                       'relatedUserId': user.uid,
                     });
 
-                    final userId = user.uid;
+                    // User notification
                     await FirebaseFirestore.instance
                         .collection('users')
-                        .doc(userId)
+                        .doc(user.uid)
                         .collection('notifications')
                         .add({
                       "type": "system",
@@ -258,6 +360,78 @@ void _updatePassword(BuildContext context) {
         },
       );
     },
+  );
+}
+
+// Helper widget for password strength indicator
+Widget _buildPasswordStrengthIndicator(String password) {
+  double strength = 0;
+  if (password.isNotEmpty) {
+    if (password.length >= 8) strength += 0.2;
+    if (password.contains(RegExp(r'[A-Z]'))) strength += 0.2;
+    if (password.contains(RegExp(r'[a-z]'))) strength += 0.2;
+    if (password.contains(RegExp(r'[0-9]'))) strength += 0.2;
+    if (password.contains(RegExp(r'[!@#\$&*~]'))) strength += 0.2;
+  }
+
+  String strengthText;
+  Color strengthColor;
+
+  if (strength <= 0.4) {
+    strengthText = "Weak";
+    strengthColor = Colors.red;
+  } else if (strength <= 0.7) {
+    strengthText = "Fair";
+    strengthColor = Colors.orange;
+  } else if (strength <= 0.9) {
+    strengthText = "Good";
+    strengthColor = Colors.yellow.shade700;
+  } else {
+    strengthText = "Strong";
+    strengthColor = Colors.green;
+  }
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      LinearProgressIndicator(
+        value: strength,
+        backgroundColor: Colors.grey.shade300,
+        color: strengthColor,
+        minHeight: 6,
+        borderRadius: BorderRadius.circular(3),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        'Password Strength: $strengthText',
+        style: TextStyle(
+          fontSize: 12,
+          color: strengthColor,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    ],
+  );
+}
+
+// Helper widget for password requirements
+Widget _buildRequirement(String text, bool isMet) {
+  return Row(
+    children: [
+      Icon(
+        isMet ? Icons.check_circle : Icons.radio_button_unchecked,
+        size: 14,
+        color: isMet ? Colors.green : Colors.grey,
+      ),
+      const SizedBox(width: 4),
+      Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          color: isMet ? Colors.green : Colors.grey,
+        ),
+      ),
+    ],
   );
 }
 
@@ -432,7 +606,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final TextEditingController phoneController =
         TextEditingController(text: _userData["phone"]);
     final TextEditingController dobController =
-        TextEditingController(text: _userData["dateOfBirth"]);
+        TextEditingController(text: _userData["birthDate"]); // ✅ CORRECT
     final TextEditingController addressController =
         TextEditingController(text: _userData["address"]);
     final TextEditingController cityController =
@@ -717,30 +891,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     if (formKey.currentState!.validate()) {
                       try {
                         // 1. Update Firestore data
+                        // ✅ FIXED: Only update user-editable fields
                         await FirebaseFirestore.instance
                             .collection('users')
                             .doc(_currentUser!.uid)
                             .update({
-                          'firstName': firstNameController.text,
-                          'middleName': middleNameController.text,
-                          'lastName': lastNameController.text,
+                          'firstName': firstNameController.text.trim(),
+                          'middleName': middleNameController.text.trim(),
+                          'lastName': lastNameController.text.trim(),
                           'gender': selectedGender,
-                          'email': emailController.text,
-                          'phone': phoneController.text,
-                          'dateOfBirth': dobController.text,
-                          'address': addressController.text,
-                          'city': cityController.text,
-                          'zipCode': zipCodeController.text,
+                          'phone': phoneController.text.trim(),
+                          'address': addressController.text.trim(),
+                          'city': cityController.text.trim(),
+                          'zipCode': zipCodeController.text.trim(),
+                          'birthDate': dobController.text.trim(),
+                          // ❌ DO NOT UPDATE: role, status, createdAt, email, username
+                          // ❌ DO NOT CREATE: firstname, lastname, name
                         });
+
+// ✅ Handle email update separately through Firebase Auth
+                        if (emailController.text.trim() != _userData['email']) {
+                          try {
+                            await _currentUser!
+                                .updateEmail(emailController.text.trim());
+                            // Then update Firestore
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(_currentUser!.uid)
+                                .update({'email': emailController.text.trim()});
+                          } catch (e) {
+                            // Handle re-authentication requirement
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    'Email update failed. Please re-login and try again.'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        }
                         await AuditLogService.logAction(
                           action: 'profile_updated',
                           details: 'User updated profile information.',
                         );
-
-                        // 2. Update Firebase Auth email if changed
-                        if (emailController.text != _userData['email']) {
-                          await _currentUser!.updateEmail(emailController.text);
-                        }
 
                         // 3. Refresh UI
                         _loadUserData();
@@ -779,149 +972,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showChangePasswordDialog() {
-    final formKey = GlobalKey<FormState>();
-    final currentPasswordController = TextEditingController();
-    final newPasswordController = TextEditingController();
-    final confirmPasswordController = TextEditingController();
-    bool obscureCurrentPwd = true;
-    bool obscureNewPwd = true;
-    bool obscureConfirmPwd = true;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('Change Password'),
-              content: Form(
-                key: formKey,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextFormField(
-                        controller: currentPasswordController,
-                        decoration: InputDecoration(
-                          labelText: 'Current Password',
-                          border: const OutlineInputBorder(),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              obscureCurrentPwd
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                obscureCurrentPwd = !obscureCurrentPwd;
-                              });
-                            },
-                          ),
-                        ),
-                        obscureText: obscureCurrentPwd,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter your current password';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: newPasswordController,
-                        decoration: InputDecoration(
-                          labelText: 'New Password',
-                          border: const OutlineInputBorder(),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              obscureNewPwd
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                obscureNewPwd = !obscureNewPwd;
-                              });
-                            },
-                          ),
-                        ),
-                        obscureText: obscureNewPwd,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter a new password';
-                          }
-                          if (value.length < 8) {
-                            return 'Password must be at least 8 characters';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: confirmPasswordController,
-                        decoration: InputDecoration(
-                          labelText: 'Confirm New Password',
-                          border: const OutlineInputBorder(),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              obscureConfirmPwd
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                obscureConfirmPwd = !obscureConfirmPwd;
-                              });
-                            },
-                          ),
-                        ),
-                        obscureText: obscureConfirmPwd,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please confirm your new password';
-                          }
-                          if (value != newPasswordController.text) {
-                            return 'Passwords do not match';
-                          }
-                          return null;
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('CANCEL'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (formKey.currentState!.validate()) {
-                      // Here would be the password change logic
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Password changed successfully'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                  ),
-                  child: const Text('CHANGE'),
                 ),
               ],
             );
@@ -1002,8 +1052,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: ElevatedButton(
               onPressed: () => _confirmLogout(context),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade50,
-                foregroundColor: Colors.red,
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -1017,7 +1067,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // App version
           Center(
             child: Text(
-              'SmartiCare v1.0.3',
+              'SmartiCare v1.0.0',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey.shade600,
@@ -1160,7 +1210,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildDetailItem(
             icon: Icons.cake_outlined,
             label: 'Date of Birth',
-            value: _userData["dateOfBirth"] ?? "Not provided",
+            value: _userData["birthDate"] ??
+                "Not provided", // ✅ CORRECT FIELD NAME
           ),
 
           // Contact info section with header
@@ -1259,7 +1310,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildSettingTile(
             icon: Icons.lock_outline,
             title: 'Change Password',
-            onTap: _showChangePasswordDialog,
+            onTap: () => _updatePassword(context), // ✅ USE THE ENHANCED VERSION
           ),
           _buildSettingTile(
             icon: Icons.pause_circle_outline,
@@ -1273,10 +1324,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+// Replace your existing _deactivateAccount with this version
   void _deactivateAccount(BuildContext context) {
+    // Capture the parent (ProfileScreen) context, not the dialog context
+    final parentContext = context;
+
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogCtx) {
         return AlertDialog(
           title: const Text('Deactivate Account'),
           content: const Text(
@@ -1284,17 +1339,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogCtx),
               child: const Text('CANCEL'),
             ),
             TextButton(
               onPressed: () async {
-                Navigator.pop(context); // Close the dialog first
-                await _performDeactivation(context); // Ensure await is used
+                // 1) Close the confirmation dialog
+                Navigator.pop(dialogCtx);
+                // 2) Call deactivation on the parent context on next frame
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _performDeactivation(parentContext);
+                });
               },
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              style: TextButton.styleFrom(
+                backgroundColor:
+                    Theme.of(context).primaryColor, // button background
+                foregroundColor: Colors.white, // text color
+              ),
               child: const Text('DEACTIVATE'),
-            ),
+            )
           ],
         );
       },
@@ -1303,8 +1366,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   // Replace the existing _performDeactivation(...) in profile_screen.dart with this updated version.
 
+  // Replace your existing _performDeactivation with this version
   Future<void> _performDeactivation(BuildContext context) async {
-    // Show a blocking loader on the ROOT navigator
+    final nav = Navigator.of(context, rootNavigator: true);
+
+    // Show blocking loader on the ROOT navigator
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -1314,10 +1380,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final uid = _currentUser?.uid;
     if (uid == null) {
-      // Close loader and show error
-      try {
-        Navigator.of(context, rootNavigator: true).pop();
-      } catch (_) {}
+      // Close loader safely and report error
+      if (nav.canPop()) nav.pop();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('No user is currently logged in.'),
@@ -1356,49 +1420,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
       );
     } finally {
-      // Try to close the loader dialog unconditionally. Wrap in try/catch to avoid exceptions.
-      try {
-        Navigator.of(context, rootNavigator: true).pop();
-      } catch (_) {}
+      // Always try to close the loader
+      if (nav.canPop()) {
+        try {
+          nav.pop();
+        } catch (_) {}
+      }
     }
 
     if (!success) return;
 
+    // Sign out; even if it fails, continue to navigate to login
     try {
-      await FirebaseAuth.instance.signOut(); // ✅ This logs out the user
+      await FirebaseAuth.instance.signOut();
     } catch (e) {
-      // Even if sign-out fails, continue to avoid trapping the user
+      // Non-fatal: show feedback
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Sign out error: $e'),
-          backgroundColor: Colors.red,
-        ),
+            content: Text('Sign out error: $e'), backgroundColor: Colors.red),
       );
     }
 
-    if (!context.mounted) return;
+    if (!mounted) return;
 
-    // Navigate to the Login screen and clear navigation stack
-    try {
+    // Navigate to Login on the root navigator after the loader is definitely closed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
         MaterialPageRoute(builder: (_) => const LoginScreen()),
         (route) => false,
       );
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account deactivated successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      // If navigation fails for some reason, make sure app isn't left with a stuck loader
+    });
+
+    // Optional: If you still want a success message, do it after a slight delay so
+    // the login screen has built. This uses the same root navigator context.
+    Future.delayed(const Duration(milliseconds: 300), () {
+      // It's okay if this fails silently when the new route replaces scaffold
       try {
-        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account deactivated successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
       } catch (_) {}
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Navigation error after deactivation: $e')),
-      );
-    }
+    });
   }
 
   Widget _buildSupportSection() {

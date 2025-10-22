@@ -245,8 +245,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   const SizedBox(height: 10),
                   _buildBulletItem(
                       'Access their personal data and assessment history.'),
-                  _buildBulletItem(
-                      'Request deletion of their account and data at any time.'),
+                  _buildBulletItem('Users can deactivate thier account.'),
                   _buildBulletItem(
                       'Refuse data collection by uninstalling the app.'),
                   const SizedBox(height: 20),

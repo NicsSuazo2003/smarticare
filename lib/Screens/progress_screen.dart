@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/Screens/scoring_service.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,7 +9,6 @@ import 'home_screen.dart';
 import 'reminder_screen.dart';
 import 'profile_screen.dart';
 import 'symptom_assessment_screen.dart';
-import 'package:fl_chart/fl_chart.dart';
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});
@@ -27,8 +27,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
   List<Map<String, dynamic>> progressData = [];
   String? _formattedDateTime;
   String? _username;
-
-  // At the start of _ProgressScreenState
 
   @override
   void initState() {
@@ -64,6 +62,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
             .collection('users')
             .doc(user.uid)
             .get();
+        if (!mounted) return;
         if (userDoc.exists) {
           final userData = userDoc.data();
           if (userData != null) {
@@ -77,7 +76,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
         }
       }
     } catch (e) {
-      print('Error fetching username: $e');
+      debugPrint('Error fetching username: $e');
     }
   }
 
@@ -90,6 +89,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _isLoadingMore = false;
@@ -121,7 +121,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
           final date = timestamp.toDate();
           final prediction = data['prediction'] as String? ?? 'Unknown';
-          final confidence = data['confidence'] as double? ?? 0.0;
+          final numConfidence = (data['confidence'] as num?) ?? 0;
           final eye = data['eye'] as String? ?? 'Unknown';
           final bool isNormal = prediction.toLowerCase().contains('normal') ||
               prediction.toLowerCase() == "no cataract";
@@ -134,11 +134,21 @@ class _ProgressScreenState extends State<ProgressScreen> {
               ? "Continue with regular checkups every 6 months."
               : "Schedule an appointment with an ophthalmologist for further evaluation.";
 
+          final scoringService = ScoringService();
+          final symptomScore = ((data['symptomScore'] as num?) ?? 0.5)
+              .toDouble(); // ✅ Convert to double
+          final healthScore = scoringService.calculateHealthScore(
+            imageScore: numConfidence.toDouble(), // ✅ Convert to double
+            symptomScore: symptomScore,
+            prediction: prediction,
+          );
           scans.add({
             "id": doc.id,
             "date": date,
             "eye": eye,
-            "score": (confidence * 100).round(),
+            "aiConfidence":
+                (numConfidence * 100).round(), // ✅ Rename for clarity
+            "healthScore": healthScore.round(), // ✅ Add actual health score
             "classification": classification,
             "result": result,
             "details": details,
@@ -149,6 +159,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
         }
       }
 
+      if (!mounted) return;
       setState(() {
         if (loadMore && progressData.isNotEmpty) {
           progressData.addAll(scans);
@@ -163,7 +174,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
         }
       });
     } catch (e) {
-      print('Error fetching progress data: $e');
+      debugPrint('Error fetching progress data: $e');
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
         _isLoadingMore = false;
@@ -341,18 +353,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          // TODO: Implement actual sharing with share_plus
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text("Scan details shared")),
-                          );
-                        },
-                        icon: const Icon(Icons.share_outlined),
-                        label: const Text("Share"),
-                      ),
                       ElevatedButton.icon(
                         onPressed: () {
                           Navigator.pop(context);
@@ -373,7 +373,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
                       ),
                     ],
                   ),
-                  // Optionally add a "Book Appointment" or "Download PDF" button here
                 ],
               ),
             ),
@@ -382,8 +381,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
       },
     );
   }
-
-// --- Helper extension to darken a color
 
   Widget _buildDetailSection(String title, String content, IconData icon) {
     return Padding(
@@ -469,72 +466,209 @@ class _ProgressScreenState extends State<ProgressScreen> {
     }
   }
 
+  /// Helper function to get the previous scan for comparison
+  Map<String, dynamic>? _getPreviousScan(int currentIndex) {
+    if (currentIndex < progressData.length - 1) {
+      return progressData[currentIndex + 1];
+    }
+    return null;
+  }
+
+  void _showHealthScoreInfo() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.info_outline, color: Color(0xFFFF6B6B)),
+            SizedBox(width: 12),
+            Text('Understanding Your Score'),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'What is Health Score?',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Your Health Score shows the overall condition of your eye based on AI analysis and your symptoms.',
+                style: TextStyle(height: 1.5),
+              ),
+              SizedBox(height: 16),
+              _buildScoreRange(
+                color: Colors.green,
+                range: '80-100%',
+                label: 'Healthy',
+                description: 'No signs of cataract detected',
+              ),
+              SizedBox(height: 12),
+              _buildScoreRange(
+                color: Colors.orange,
+                range: '60-79%',
+                label: 'Monitor',
+                description: 'Early signs detected. Schedule follow-up',
+              ),
+              SizedBox(height: 12),
+              _buildScoreRange(
+                color: Colors.red,
+                range: 'Below 60%',
+                label: 'Consult Doctor',
+                description: 'Cataract detected. See specialist soon',
+              ),
+              SizedBox(height: 16),
+              Container(
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.tips_and_updates,
+                        color: Colors.blue.shade700, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Lower scores mean more attention needed for your eye health.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Got It'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScoreRange({
+    required Color color,
+    required String range,
+    required String label,
+    required String description,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          margin: EdgeInsets.only(top: 4),
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    range,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: color,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 2),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProgressionExample({
+    required String emoji,
+    required String label,
+    required String example,
+    required String description,
+    required Color color,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          emoji,
+          style: TextStyle(fontSize: 18),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: color,
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                example,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFFFF6B6B);
-
-    // Extract data for chart
-    // Extract data for chart
-    // Replace the entire chart data extraction section in your build method with this:
-
-// Extract data for chart
-    List<int> rightEyeScores = [];
-    List<int> leftEyeScores = [];
-    List<String> labels = [];
-
-    if (progressData.isNotEmpty) {
-      // Sort by date ascending
-      final sortedData = List<Map<String, dynamic>>.from(progressData)
-        ..sort(
-            (a, b) => (a["date"] as DateTime).compareTo(b["date"] as DateTime));
-
-      // Take only the last 6 scans for the chart
-      final limitedData = sortedData.length > 6
-          ? sortedData.sublist(sortedData.length - 6)
-          : sortedData;
-
-      // Get unique dates for labels
-      final uniqueDates = <DateTime>{};
-      final dateScanMap = <DateTime, Map<String, int>>{};
-
-      // Organize data by date and eye - FIXED VERSION
-      for (var scan in limitedData) {
-        final date = (scan["date"] as DateTime).toLocal();
-        final normalizedDate = DateTime(date.year, date.month, date.day);
-        final eye = (scan["eye"] as String).toLowerCase();
-        final score = scan["score"] as int;
-
-        uniqueDates.add(normalizedDate);
-
-        // Initialize if not exists, but don't overwrite existing data
-        dateScanMap.putIfAbsent(normalizedDate, () => <String, int>{});
-
-        // Store both eyes without overwriting
-        if (eye.contains("right")) {
-          dateScanMap[normalizedDate]!["right"] = score;
-        } else if (eye.contains("left")) {
-          dateScanMap[normalizedDate]!["left"] = score;
-        }
-      }
-
-      // Sort dates and create labels - FIXED: Define sortedDates properly
-      final sortedDatesList = uniqueDates.toList()..sort();
-      labels = sortedDatesList
-          .map((date) => DateFormat.MMMd().format(date))
-          .toList();
-
-      // Build score arrays aligned with dates
-      for (var date in sortedDatesList) {
-        final scores = dateScanMap[date];
-        rightEyeScores.add(scores?["right"] ?? 0);
-        leftEyeScores.add(scores?["left"] ?? 0);
-      }
-
-      // Debug print to verify data
-      print("Chart Data - Labels: $labels");
-      print("Chart Data - Right Eye: $rightEyeScores");
-      print("Chart Data - Left Eye: $leftEyeScores");
-    }
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
@@ -578,69 +712,164 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 Row(
                   children: [
                     const Text(
-                      'Eye Health Progression',
+                      'Eye Health Timeline',
                       style:
                           TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                     const SizedBox(width: 8),
-                    Tooltip(
-                      message: 'Shows your eye scan results over time. '
-                          'The score represents AI confidence in the analysis, not direct health status.',
-                      child: Icon(Icons.info_outline,
-                          color: Colors.blueGrey, size: 20),
+                    // ✅ NEW: Progression logic tooltip
+                    InkWell(
+                      onTap: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: Row(
+                              children: [
+                                Icon(Icons.timeline, color: Color(0xFFFF6B6B)),
+                                SizedBox(width: 12),
+                                Text('Progression Logic'),
+                              ],
+                            ),
+                            content: SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'How is progression calculated?',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Each scan is compared to your previous scan of the SAME EYE to track changes:',
+                                    style: TextStyle(height: 1.5),
+                                  ),
+                                  SizedBox(height: 16),
+                                  _buildProgressionExample(
+                                    emoji: '🔴',
+                                    label: 'Worsening',
+                                    example: 'Normal → Cataract',
+                                    description: 'Condition got worse',
+                                    color: Colors.red,
+                                  ),
+                                  SizedBox(height: 12),
+                                  _buildProgressionExample(
+                                    emoji: '🟢',
+                                    label: 'Improving',
+                                    example: 'Cataract → Normal',
+                                    description: 'Condition got better',
+                                    color: Colors.green,
+                                  ),
+                                  SizedBox(height: 12),
+                                  _buildProgressionExample(
+                                    emoji: '🟠',
+                                    label: 'Stable',
+                                    example: 'Normal → Normal',
+                                    description: 'No change detected',
+                                    color: Colors.orange,
+                                  ),
+                                  SizedBox(height: 12),
+                                  _buildProgressionExample(
+                                    emoji: '🆕',
+                                    label: 'New',
+                                    example: 'First scan',
+                                    description: 'Need 2nd scan to compare',
+                                    color: Colors.blueGrey,
+                                  ),
+                                  SizedBox(height: 16),
+                                  Container(
+                                    padding: EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(Icons.info_outline,
+                                            color: Colors.blue.shade700,
+                                            size: 20),
+                                        SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            'Left and Right eyes are tracked separately for accurate monitoring.',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              color: Colors.blue.shade900,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: Text('Got It'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      child: Container(
+                        padding: EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.info_outline,
+                          color: Colors.blue.shade700,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // ✅ EXISTING: Health score info button
+                    InkWell(
+                      onTap: _showHealthScoreInfo,
+                      child: Container(
+                        padding: EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Color(0xFFFF6B6B).withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.help_outline,
+                          color: Color(0xFFFF6B6B),
+                          size: 20,
+                        ),
+                      ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Track your eye scan history and AI analysis confidence levels.',
+                  'Track your eye health status and progression over time.',
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
                 ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Text(
-                      'Score: AI confidence level (0-100%)',
-                      style: TextStyle(
-                        color: Colors.blueGrey.shade600,
-                        fontSize: 12,
-                        fontStyle: FontStyle.italic,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    Tooltip(
-                      message:
-                          'Higher percentage means the AI is more confident in its analysis. '
-                          'Focus on the Normal/Immature classification for health status.',
-                      child: Icon(Icons.info_outline,
-                          color: Colors.blueGrey, size: 16),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    _LegendPill(color: Colors.amber, label: "Left Eye"),
-                    const SizedBox(width: 10),
-                    _LegendPill(color: Colors.green, label: "Right Eye"),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                // --- ONLY THE CHART INSIDE THE CARD ---
-                EyeHealthProgressionChart(
-                  rightEyeScores: rightEyeScores,
-                  leftEyeScores: leftEyeScores,
-                  labels: labels,
-                  isEmpty: progressData.isEmpty,
-                ),
+
+                const SizedBox(height: 16),
+
+                // STATUS TIMELINE - REPLACING THE LINE CHART
+                if (progressData.isEmpty)
+                  _buildEmptyState(primaryColor)
+                else
+                  ..._buildTimelineCards(primaryColor),
 
                 const SizedBox(height: 28),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Scan History',
+                      'All Scans',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         color: Colors.grey.shade800,
@@ -727,6 +956,74 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
+  /// Build empty state widget
+  Widget _buildEmptyState(Color primaryColor) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      elevation: 5,
+      margin: EdgeInsets.zero,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            colors: [Colors.blue.shade50, Colors.white],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        padding: const EdgeInsets.all(28),
+        height: 240,
+        width: double.infinity,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.timeline, size: 48, color: Colors.grey.shade300),
+              const SizedBox(height: 12),
+              Text(
+                'No scan history yet',
+                style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Complete your first eye scan to track your eye health over time', // ✅ Better wording
+                style: TextStyle(
+                  color: Colors.grey.shade500,
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Build timeline cards - NEW WIDGET REPLACING LINE CHART
+  List<Widget> _buildTimelineCards(Color primaryColor) {
+    final cards = <Widget>[];
+
+    for (int i = 0; i < progressData.length; i++) {
+      final scan = progressData[i];
+      final previousScan = _getPreviousScan(i);
+
+      cards.add(
+        _TimelineCard(
+          scan: scan,
+          previousScan: previousScan,
+          primaryColor: primaryColor,
+          onTap: () => _showScanDetails(scan),
+        ),
+      );
+    }
+
+    return cards;
+  }
+
   Widget _buildBottomNavigationBar(Color primaryColor) {
     return BottomNavigationBar(
       currentIndex: _selectedNavIndex,
@@ -781,206 +1078,323 @@ class _ProgressScreenState extends State<ProgressScreen> {
   }
 }
 
-class EyeHealthProgressionChart extends StatelessWidget {
-  final List<int> rightEyeScores;
-  final List<int> leftEyeScores;
-  final List<String> labels;
-  final bool isEmpty;
+/// NEW WIDGET: Timeline Card replacing LineChart
+class _TimelineCard extends StatelessWidget {
+  final Map<String, dynamic> scan;
+  final Map<String, dynamic>? previousScan;
+  final Color primaryColor;
+  final VoidCallback onTap;
 
-  const EyeHealthProgressionChart({
-    required this.rightEyeScores,
-    required this.leftEyeScores,
-    required this.labels,
-    required this.isEmpty,
+  const _TimelineCard({
+    required this.scan,
+    this.previousScan,
+    required this.primaryColor,
+    required this.onTap,
   });
+  Color _getHealthScoreColor(int healthScore) {
+    if (healthScore >= 80) return Colors.green;
+    if (healthScore >= 60) return Colors.orange;
+    return Colors.red;
+  }
+
+  // ✅ ADD THIS METHOD:
+  String _getHealthScoreLabel(int healthScore) {
+    if (healthScore >= 80) return 'Healthy';
+    if (healthScore >= 60) return 'Monitor';
+    return 'See Doctor';
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (isEmpty) {
-      return Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        elevation: 5,
-        margin: EdgeInsets.zero,
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(
-              colors: [Colors.blue.shade50, Colors.white],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-          padding: const EdgeInsets.all(28),
-          height: 240,
-          width: double.infinity,
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.trending_up, size: 48, color: Colors.grey.shade300),
-                const SizedBox(height: 12),
-                Text(
-                  'No progression data yet',
-                  style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Complete multiple eye scans to see your progression',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 14,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
+    final DateTime date = scan["date"] as DateTime;
+    final String classification = scan["classification"] as String;
+    final String eye = scan["eye"] as String;
+
+    // Determine if classification changed from previous scan
+    final String? previousClassification =
+        previousScan?["classification"] as String?;
+    final bool statusChanged = previousClassification != null &&
+        previousClassification != classification;
+
+    // Color based on classification
+    final Color statusColor =
+        classification == "Normal" ? Colors.green : Colors.amber;
+
+    // Icon based on classification
+    final IconData statusIcon =
+        classification == "Normal" ? Icons.check_circle : Icons.warning_amber;
+
+    // Progression computation similar to admin
+    String progressionStatus = 'NEW';
+    if (previousClassification != null) {
+      const severityMap = {
+        'Normal': 0,
+        'Immature': 1,
+        'Mature': 2,
+        'Advanced': 3,
+      };
+      final currentSeverity = severityMap[classification] ?? 0;
+      final previousSeverity = severityMap[previousClassification] ?? 0;
+      if (currentSeverity > previousSeverity) {
+        progressionStatus = 'WORSENING';
+      } else if (currentSeverity < previousSeverity) {
+        progressionStatus = 'IMPROVING';
+      } else {
+        progressionStatus = 'STABLE';
+      }
+    }
+    IconData progressionIcon;
+    Color progressionColor;
+    switch (progressionStatus) {
+      case 'WORSENING':
+        progressionIcon = Icons.trending_down;
+        progressionColor = Colors.red;
+        break;
+      case 'IMPROVING':
+        progressionIcon = Icons.trending_up;
+        progressionColor = Colors.green;
+        break;
+      case 'STABLE':
+        progressionIcon = Icons.trending_flat;
+        progressionColor = Colors.orange;
+        break;
+      default:
+        progressionIcon = Icons.fiber_new;
+        progressionColor = Colors.blueGrey;
     }
 
-    // Convert scores to FlSpot
-    List<FlSpot> leftSpots = [];
-    List<FlSpot> rightSpots = [];
-    for (int i = 0; i < leftEyeScores.length; i++) {
-      leftSpots.add(FlSpot(i.toDouble(), leftEyeScores[i].toDouble()));
-    }
-    for (int i = 0; i < rightEyeScores.length; i++) {
-      rightSpots.add(FlSpot(i.toDouble(), rightEyeScores[i].toDouble()));
-    }
-
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      elevation: 5,
-      margin: EdgeInsets.zero,
+    return GestureDetector(
+      onTap: onTap,
       child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade50, Colors.white],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: statusColor.withOpacity(0.2),
+            width: 2,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.shade100,
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-        height: 270,
-        width: double.infinity,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Y-axis label with more space
-                  Padding(
-                    padding: const EdgeInsets.only(right: 10.0),
-                    child: Center(
-                      child: RotatedBox(
-                        quarterTurns: -1,
-                        child: Text(
-                          "Score",
-                          style: TextStyle(
-                            color: Colors.blueGrey.shade400,
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 0.0, bottom: 12.0),
-                      child: LineChart(
-                        LineChartData(
-                          minY: 0,
-                          maxY: 100,
-                          lineTouchData: LineTouchData(
-                            touchTooltipData: LineTouchTooltipData(
-                              getTooltipItems: (touchedSpots) {
-                                return touchedSpots.map((spot) {
-                                  return LineTooltipItem(
-                                    '${spot.bar.color == Colors.amber ? "Left" : "Right"} Eye\n'
-                                    '${labels.isNotEmpty && spot.x.toInt() < labels.length ? labels[spot.x.toInt()] : ""}: '
-                                    '${spot.y.toStringAsFixed(1)}%',
-                                    const TextStyle(color: Colors.white),
-                                  );
-                                }).toList();
-                              },
-                            ),
-                          ),
-                          lineBarsData: [
-                            LineChartBarData(
-                              spots: leftSpots,
-                              isCurved: true,
-                              color: Colors.amber,
-                              barWidth: 3,
-                              dotData: FlDotData(show: true),
-                              belowBarData: BarAreaData(show: false),
-                            ),
-                            LineChartBarData(
-                              spots: rightSpots,
-                              isCurved: true,
-                              color: Colors.green,
-                              barWidth: 3,
-                              dotData: FlDotData(show: true),
-                              belowBarData: BarAreaData(show: false),
-                            ),
-                          ],
-                          titlesData: FlTitlesData(
-                            leftTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                reservedSize: 38,
-                              ),
-                            ),
-                            bottomTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                getTitlesWidget: (value, meta) {
-                                  final idx = value.toInt();
-                                  if (idx >= 0 && idx < labels.length) {
-                                    return Text(labels[idx],
-                                        style: TextStyle(fontSize: 10));
-                                  }
-                                  return const Text('');
-                                },
-                              ),
-                            ),
-                            topTitles: AxisTitles(
-                                sideTitles: SideTitles(showTitles: false)),
-                            rightTitles: AxisTitles(
-                                sideTitles: SideTitles(showTitles: false)),
-                          ),
-                          gridData:
-                              FlGridData(show: true, horizontalInterval: 10),
-                          borderData: FlBorderData(show: false),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // X-axis label
-            Align(
-              alignment: Alignment.center,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text(
-                  "Scan Date",
+            // Date header with status change badge
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  DateFormat('E, MMM d, yyyy').format(date),
                   style: TextStyle(
-                    color: Colors.blueGrey.shade400,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1.2,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade700,
                   ),
                 ),
+                if (statusChanged)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: progressionColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: progressionColor.withOpacity(0.4),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          progressionIcon,
+                          size: 12,
+                          color: progressionColor,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          progressionStatus == 'IMPROVING'
+                              ? 'Improved'
+                              : (progressionStatus == 'WORSENING'
+                                  ? 'Worsened'
+                                  : 'Status changed'),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: progressionColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Divider(
+              color: Colors.grey.shade200,
+              height: 1,
+            ),
+            const SizedBox(height: 12),
+
+            // Eye status display
+            Row(
+              children: [
+                // Status icon
+                Icon(
+                  statusIcon,
+                  size: 24,
+                  color: statusColor,
+                ),
+                const SizedBox(width: 12),
+
+                // Eye and classification info
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        eye,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        classification,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: statusColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // AI confidence as secondary detail
+                // Health score as primary indicator
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      'Health Score',
+                      style:
+                          TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${scan["healthScore"] ?? 0}%',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: _getHealthScoreColor(scan["healthScore"] ?? 0),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    // ✅ ADD THIS:
+                    Text(
+                      _getHealthScoreLabel(scan["healthScore"] ?? 0),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: _getHealthScoreColor(scan["healthScore"] ?? 0),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            // Add after classification display, before progression indicator
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Eye Health Status',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: LinearProgressIndicator(
+                          value: (scan["healthScore"] ?? 0) / 100,
+                          minHeight: 8,
+                          backgroundColor: Colors.grey.shade200,
+                          valueColor: AlwaysStoppedAnimation(
+                            _getHealthScoreColor(scan["healthScore"] ?? 0),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            // Progression indicator (if previous exists)
+            if (previousClassification != null) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: progressionColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      progressionIcon,
+                      size: 16,
+                      color: progressionColor,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Progression: $progressionStatus',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: progressionColor,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '($previousClassification → $classification)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        color: progressionColor.withOpacity(0.8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            // Tap indicator
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Icon(
+                Icons.arrow_forward_ios,
+                size: 14,
+                color: Colors.grey.shade400,
               ),
             ),
           ],
@@ -990,44 +1404,7 @@ class EyeHealthProgressionChart extends StatelessWidget {
   }
 }
 
-// Modern legend pill
-class _LegendPill extends StatelessWidget {
-  final Color color;
-  final String label;
-  const _LegendPill({required this.color, required this.label});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.17),
-        borderRadius: BorderRadius.circular(50),
-        border: Border.all(color: color, width: 1),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: color.darken(0.3),
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// --- Helper extension to darken a color
-
+/// EXISTING WIDGET: Progress Card (kept for "All Scans" section below timeline)
 class _ProgressCard extends StatelessWidget {
   final Map<String, dynamic> scan;
   final Color primaryColor;
@@ -1045,10 +1422,8 @@ class _ProgressCard extends StatelessWidget {
     final bool isRightEye = scan["eye"] == "Right Eye";
     final String classification = scan["classification"] as String;
 
-    // Set colors based on eye type and classification
     final Color statusColor =
         classification == "Normal" ? Colors.green : Colors.amber;
-
     final Color eyeColor = isRightEye ? Colors.green : Colors.amber;
 
     return GestureDetector(
@@ -1120,7 +1495,7 @@ class _ProgressCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      "Health Score: ${scan["score"]}%   |   ${scan["result"]}",
+                      "Health Score: ${scan["healthScore"] ?? scan["score"]}%   |   ${scan["result"]}",
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.grey.shade800,
@@ -1130,7 +1505,6 @@ class _ProgressCard extends StatelessWidget {
                 ),
               ),
             ),
-            // Visual indicator that card is tappable
             Positioned(
               right: 8,
               top: 0,

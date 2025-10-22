@@ -89,7 +89,7 @@ class _ViewHistoryScreenState extends State<ViewHistoryScreen> {
           "time": time,
           "eye": eye,
           "healthScore": data['healthScore'] != null
-              ? "${(data['healthScore'] * 100).round()}%"
+              ? "${data['healthScore'].round()}%"
               : "${(confidence * 100).round()}%",
           "classification": classification,
           "result": result,

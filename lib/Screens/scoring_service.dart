@@ -1,27 +1,19 @@
 import 'dart:math';
 
-/// ScoringService calculates a weighted health score based on image predictions and user reported symptoms.
-///
-/// The final health score H is computed by combining the image score (I) from a CNN and the symptom score (S) from the questionnaire using weighted coefficients:
-///
-/// H = weightImage * I + weightSymptom * S
-///
-/// Where:
-/// - I is the image score (expected to be a probability between 0 and 1)
-/// - S is the symptom score (expected to be normalized between 0 and 1)
-/// - weightImage and weightSymptom reflect the importance of each component (defaulting to 0.7 and 0.3, respectively)
 class ScoringService {
   final double weightImage;
   final double weightSymptom;
 
   ScoringService({this.weightImage = 0.7, this.weightSymptom = 0.3});
 
-  /// Calculate the overall health score.
-  ///
-  /// [imageScore] and [symptomScore] should be provided as values between 0 and 1.
-  /// Returns a double value representing the final health score, capped at 1.0.
-  double calculateHealthScore(
-      {required double imageScore, required double symptomScore}) {
+  /// Calculate the overall health score (0-100 scale).
+  /// For Normal: high confidence = high health score
+  /// For Cataract: high confidence = low health score (inverted)
+  double calculateHealthScore({
+    required double imageScore,
+    required double symptomScore,
+    String? prediction,
+  }) {
     if (imageScore < 0 || imageScore > 1) {
       throw ArgumentError('Image score must be between 0 and 1');
     }
@@ -29,8 +21,27 @@ class ScoringService {
       throw ArgumentError('Symptom score must be between 0 and 1');
     }
 
-    double healthScore =
-        (weightImage * imageScore) + (weightSymptom * symptomScore);
-    return min(healthScore, 1.0);
+    // Determine if prediction is cataract
+    double adjustedImageScore = imageScore;
+    if (prediction != null) {
+      final predLower = prediction.toLowerCase();
+      final isCataract =
+          !predLower.contains('normal') && !predLower.contains('no cataract');
+
+      if (isCataract) {
+        // For cataract: high confidence = low health
+        adjustedImageScore = 1.0 - imageScore;
+      }
+      // For normal: keep as is (high confidence = high health)
+    }
+
+    // High symptoms = low health (invert)
+    double adjustedSymptomScore = 1.0 - symptomScore;
+
+    double healthScore = (weightImage * adjustedImageScore) +
+        (weightSymptom * adjustedSymptomScore);
+
+    // Return as percentage (0-100)
+    return min(healthScore * 100, 100.0);
   }
 }

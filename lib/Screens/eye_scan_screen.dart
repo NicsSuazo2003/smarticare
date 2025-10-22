@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -34,6 +37,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
   String _selectedEye = 'Left Eye';
   bool _isCameraActive = false;
   int _selectedNavIndex = 2;
+  bool _poorLighting = false;
 
   CameraController? _cameraController;
   List<CameraDescription> _cameras = [];
@@ -49,6 +53,33 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
   Future<void> _setupCamera() async {
     await _initializeCamera();
     await _startCamera();
+  }
+
+  Future<void> _checkLighting() async {
+    if (!_isCameraInitialized || _cameraController == null) return;
+
+    try {
+      // Take a low-res frame for analysis
+      XFile image = await _cameraController!.takePicture();
+      File imageFile = File(image.path);
+
+      // Load and analyze
+      final bytes = await imageFile.readAsBytes();
+      img.Image? capturedImage = img.decodeImage(bytes);
+      if (capturedImage != null) {
+        double luminance = _calculateAverageLuminance(capturedImage);
+
+        // Update state based on thresholds
+        setState(() {
+          _poorLighting = luminance < 75 || luminance > 220;
+        });
+      }
+
+      // Delete the temp file
+      await imageFile.delete();
+    } catch (e) {
+      print('Error checking lighting: $e');
+    }
   }
 
   Future<void> _startCamera() async {
@@ -154,6 +185,15 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
       if (!mounted) return;
       setState(() {
         _isCameraInitialized = true;
+      });
+      // Add this block - Start periodic lighting checks
+      _checkLighting(); // Initial check
+      Timer.periodic(Duration(seconds: 2), (timer) {
+        if (!_isCameraInitialized || !_isCameraActive) {
+          timer.cancel();
+          return;
+        }
+        _checkLighting(); // Regular checks
       });
     } on CameraException catch (e) {
       print('Error initializing camera: ${e.description}');
@@ -297,6 +337,102 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
     }
   }
 
+  // Add this method to check upload image quality
+  Future<bool> _validateUploadImage(File imageFile) async {
+    try {
+      final bytes = await imageFile.readAsBytes();
+      img.Image? image = img.decodeImage(bytes);
+      if (image == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cannot read image file')),
+        );
+        return false;
+      }
+
+      // Check image dimensions - ensure sufficient detail for analysis
+      if (image.width < 200 || image.height < 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text(
+                  'Image too small - please use a higher resolution image')),
+        );
+        return false;
+      }
+
+      // Ensure the image isn't too blurry for accurate analysis
+      double blurScore = _calculateBlurScore(image);
+      if (blurScore < 20) {
+        // Arbitrary threshold - adjust based on testing
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content:
+                  Text('Image is too blurry - please use a clearer image')),
+        );
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error validating image: $e')),
+      );
+      return false;
+    }
+  }
+
+// Add this helper function to detect blurry images
+  double _calculateBlurScore(img.Image image) {
+    // Simple Laplacian variance as blur metric
+    img.Image gray = img.grayscale(image);
+    double variance = 0.0;
+    double mean = 0.0;
+    int count = 0;
+
+    // Calculate mean value (sample every few pixels for performance)
+    for (int y = 1; y < gray.height - 1; y += 3) {
+      for (int x = 1; x < gray.width - 1; x += 3) {
+        final pixel = gray.getPixel(x, y);
+        mean += pixel.r;
+        count++;
+      }
+    }
+    mean /= count;
+
+    // Calculate variance
+    for (int y = 1; y < gray.height - 1; y += 3) {
+      for (int x = 1; x < gray.width - 1; x += 3) {
+        final c = gray.getPixel(x, y).r;
+        final n = gray.getPixel(x, y - 1).r;
+        final s = gray.getPixel(x, y + 1).r;
+        final e = gray.getPixel(x + 1, y).r;
+        final w = gray.getPixel(x - 1, y).r;
+
+        // Simple Laplacian
+        final laplacian = (c * 4) - n - s - e - w;
+        variance += (laplacian - mean) * (laplacian - mean);
+      }
+    }
+
+    return variance / count;
+  }
+
+  double _calculateAverageLuminance(img.Image image) {
+    double totalLuminance = 0;
+    int sampleCount = 0;
+
+    // Sample pixels (every 10th pixel for performance)
+    for (int y = 0; y < image.height; y += 10) {
+      for (int x = 0; x < image.width; x += 10) {
+        final pixel = image.getPixel(x, y);
+        final luminance = (pixel.r * 0.299 + pixel.g * 0.587 + pixel.b * 0.114);
+        totalLuminance += luminance;
+        sampleCount++;
+      }
+    }
+
+    return sampleCount > 0 ? totalLuminance / sampleCount : 0;
+  }
+
   Future<void> _pickImage() async {
     try {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -308,12 +444,17 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
 
       final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
       if (image != null) {
-        // Define originalImage first
         File originalImage = File(image.path);
 
-        // Then crop it
+        // Add quality check for uploads only
+        if (!await _validateUploadImage(originalImage)) {
+          return;
+        }
+
+        // Use the improved cropping that matches camera processing
         File croppedImage = await _cropImageToCenterSquare(originalImage);
 
+        // Rest of your existing code remains the same...
         setState(() {
           _selectedImage = croppedImage;
         });
@@ -444,35 +585,163 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
     }
   }
 
+// Replace only the _cropImageToCenterSquare method with this:
   Future<File> _cropImageToCenterSquare(File imageFile) async {
     final bytes = await imageFile.readAsBytes();
     img.Image? oriImage = img.decodeImage(bytes);
     if (oriImage == null) throw Exception('Cannot decode image');
 
-    // Determine the size for square crop (use smaller dimension)
-    int size =
-        oriImage.width < oriImage.height ? oriImage.width : oriImage.height;
+    // STEP 1: EXTREME camera simulation
 
-    // Calculate center crop coordinates
-    int cropX = (oriImage.width - size) ~/ 2;
-    int cropY = (oriImage.height - size) ~/ 2;
-
-    img.Image cropped = img.copyCrop(
+    // Apply much stronger camera-like effects
+    img.Image processed = img.adjustColor(
       oriImage,
-      x: cropX,
-      y: cropY,
+      contrast: 1.35, // Very high contrast
+      brightness: 0.9, // Darker
+      saturation: 0.85, // More desaturated
+    );
+
+    // Apply extreme screen-like texture
+    processed = _addExtremeScreenTexture(processed);
+
+    // Add stronger camera noise
+    processed = _addCameraNoise(processed, 8.0); // Much higher noise
+
+    // STEP 2: Crop and resize as before
+    int size =
+        processed.width < processed.height ? processed.width : processed.height;
+    img.Image squareImage = img.copyCrop(
+      processed,
+      x: (processed.width - size) ~/ 2,
+      y: (processed.height - size) ~/ 2,
       width: size,
       height: size,
     );
 
-    // Save to temp file
+    // STEP 3: Resize and add blur
+    img.Image resized = img.copyResize(squareImage,
+        width: 224, height: 224, interpolation: img.Interpolation.cubic);
+
+    // Apply stronger blur
+    resized = img.gaussianBlur(resized, radius: 2); // More blur
+
+    // Save file
     final tempDir = Directory.systemTemp;
     final croppedPath =
-        '${tempDir.path}/gallery_cropped_${DateTime.now().millisecondsSinceEpoch}.png';
+        '${tempDir.path}/gallery_processed_${DateTime.now().millisecondsSinceEpoch}.png';
     final croppedFile = File(croppedPath);
-    await croppedFile.writeAsBytes(img.encodePng(cropped));
+    await croppedFile.writeAsBytes(img.encodePng(resized));
+
     return croppedFile;
   }
+
+// New method with extreme screen texture effect
+  img.Image _addExtremeScreenTexture(img.Image src) {
+    img.Image result = img.Image.from(src);
+    final random = Random();
+
+    // Create a stronger pixel grid effect
+    for (int y = 0; y < src.height; y++) {
+      for (int x = 0; x < src.width; x++) {
+        if ((x % 3 == 0 || y % 3 == 0)) {
+          final pixel = src.getPixel(x, y);
+
+          // More aggressive darkening of grid lines
+          int r = (pixel.r * 0.92).round().clamp(0, 255);
+          int g = (pixel.g * 0.92).round().clamp(0, 255);
+          int b = (pixel.b * 0.92).round().clamp(0, 255);
+
+          result.setPixel(x, y, img.ColorRgb8(r, g, b));
+        }
+
+        // Add a "screen glare" effect in some parts
+        if ((x + y) % 17 == 0 && random.nextDouble() > 0.7) {
+          final pixel = src.getPixel(x, y);
+
+          // Add slight highlight
+          int r = (pixel.r * 1.15).round().clamp(0, 255);
+          int g = (pixel.g * 1.15).round().clamp(0, 255);
+          int b = (pixel.b * 1.15).round().clamp(0, 255);
+
+          result.setPixel(x, y, img.ColorRgb8(r, g, b));
+        }
+      }
+    }
+
+    return result;
+  }
+
+// Add this new helper method to simulate screen pixels
+  img.Image _addScreenPattern(img.Image src) {
+    img.Image result = img.Image.from(src);
+    final random = Random();
+
+    // Create a subtle pixel grid effect (every 3-4 pixels)
+    for (int y = 0; y < src.height; y++) {
+      for (int x = 0; x < src.width; x++) {
+        if ((x % 3 == 0 || y % 3 == 0) && random.nextDouble() > 0.7) {
+          final pixel = src.getPixel(x, y);
+
+          // Slightly darken grid lines
+          int r = (pixel.r * 0.97).round().clamp(0, 255);
+          int g = (pixel.g * 0.97).round().clamp(0, 255);
+          int b = (pixel.b * 0.97).round().clamp(0, 255);
+
+          result.setPixel(x, y, img.ColorRgb8(r, g, b));
+        }
+      }
+    }
+
+    return result;
+  }
+
+// Helper function to calculate image intensity
+  double _calculateAverageIntensity(img.Image image) {
+    double totalIntensity = 0;
+    int pixels = 0;
+
+    // Sample every 5th pixel for performance
+    for (int y = 0; y < image.height; y += 5) {
+      for (int x = 0; x < image.width; x += 5) {
+        final pixel = image.getPixel(x, y);
+        final intensity = (pixel.r + pixel.g + pixel.b) / 3;
+        totalIntensity += intensity;
+        pixels++;
+      }
+    }
+
+    return pixels > 0 ? totalIntensity / pixels : 128;
+  }
+
+// Helper function to add realistic camera noise
+  img.Image _addCameraNoise(img.Image src, double amount) {
+    img.Image result = img.Image.from(src);
+    final random = Random();
+
+    for (int y = 0; y < src.height; y++) {
+      for (int x = 0; x < src.width; x++) {
+        // Only apply noise to some pixels
+        if (random.nextDouble() > 0.7) {
+          final pixel = src.getPixel(x, y);
+
+          // Generate noise values (-amount to +amount)
+          int noiseR = ((random.nextDouble() * 2 * amount) - amount).round();
+          int noiseG = ((random.nextDouble() * 2 * amount) - amount).round();
+          int noiseB = ((random.nextDouble() * 2 * amount) - amount).round();
+
+          // Apply noise - add explicit toInt() to fix type error
+          int r = (pixel.r + noiseR).clamp(0, 255).toInt();
+          int g = (pixel.g + noiseG).clamp(0, 255).toInt();
+          int b = (pixel.b + noiseB).clamp(0, 255).toInt();
+
+          result.setPixel(x, y, img.ColorRgb8(r, g, b));
+        }
+      }
+    }
+
+    return result;
+  }
+// Helper function to add realistic camera noise
 
   void _onNavItemTapped(int index) {
     if (_selectedNavIndex == index) {
@@ -750,20 +1019,60 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                 ),
               ),
             ),
+            if (_poorLighting)
+              Positioned(
+                top: 120,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Icons.warning_amber_rounded, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          'Poor lighting detected',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             // Capture button
+
             Positioned(
               bottom: 40,
               left: 0,
               right: 0,
               child: Center(
                 child: GestureDetector(
-                  onTap: _isCapturing ? null : _captureImage,
+                  onTap: (_isCapturing || _poorLighting) ? null : _captureImage,
                   child: Container(
                     width: 70,
                     height: 70,
                     padding: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.8),
+                      color: (_isCapturing || _poorLighting)
+                          ? Colors.grey.withOpacity(0.8)
+                          : Colors.white.withOpacity(0.8),
                       shape: BoxShape.circle,
                     ),
                     child: Container(

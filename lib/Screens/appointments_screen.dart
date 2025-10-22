@@ -108,7 +108,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Appointment Details"),
+        title: const Text("Referral Details"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -157,7 +157,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Appointments"),
+        title: const Text("Referrals"),
         backgroundColor: primaryColor,
         centerTitle: true,
       ),
@@ -165,7 +165,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _appointments.isEmpty
-              ? const Center(child: Text("No appointments found."))
+              ? const Center(child: Text("No Referrals found."))
               : ListView.separated(
                   padding: const EdgeInsets.all(20),
                   itemCount: _appointments.length,
@@ -205,7 +205,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        "${app["type"]?.isNotEmpty == true ? app["type"] : "Appointment"}"
+                                        "${app["type"]?.isNotEmpty == true ? app["type"] : "Referral"}"
                                         "${(app["doctorName"] != null && app["doctorName"].toString().isNotEmpty) ? " with ${app["doctorName"]}" : ""}",
                                         style: const TextStyle(
                                           fontWeight: FontWeight.bold,
@@ -294,10 +294,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                       showDialog(
                                         context: context,
                                         builder: (_) => AlertDialog(
-                                          title:
-                                              const Text("Cancel Appointment"),
+                                          title: const Text("Cancel Referral"),
                                           content: Text(
-                                            "Are you sure you want to cancel your appointment${(app["doctorName"] != null && app["doctorName"].toString().isNotEmpty) ? " with ${app["doctorName"]}" : ""}?",
+                                            "Are you sure you want to cancel your Referral${(app["doctorName"] != null && app["doctorName"].toString().isNotEmpty) ? " with ${app["doctorName"]}" : ""}?",
                                           ),
                                           actions: [
                                             TextButton(
@@ -339,11 +338,11 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                                       .collection(
                                                           'notifications')
                                                       .add({
-                                                    "type": "appointment",
+                                                    "type": "Referral",
                                                     "title":
-                                                        "Appointment Cancelled",
+                                                        "Referral Cancelled",
                                                     "message":
-                                                        "Your appointment at ${appointment["clinicName"]} on ${appointment["date"]} at ${appointment["time"]} was cancelled.",
+                                                        "Your Referral at ${appointment["clinicName"]} on ${appointment["date"]} at ${appointment["time"]} was cancelled.",
                                                     "timestamp": FieldValue
                                                         .serverTimestamp(),
                                                     "isRead": false,
@@ -352,9 +351,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                                   await AuditLogService
                                                       .logAction(
                                                     action:
-                                                        'appointment_cancelled',
+                                                        'Referral_cancelled',
                                                     details:
-                                                        'Cancelled appointment at ${appointment["clinicName"]} on ${appointment["date"]} at ${appointment["time"]}.',
+                                                        'Cancelled Referral at ${appointment["clinicName"]} on ${appointment["date"]} at ${appointment["time"]}.',
                                                     appointmentId: id,
                                                   );
                                                   // Admin notification for appointment cancelled
@@ -364,9 +363,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                                           'admin_notifications')
                                                       .add({
                                                     'type':
-                                                        'appointment_cancelled',
+                                                        'Referral_cancelled',
                                                     'message':
-                                                        'Appointment at ${appointment["clinicName"]} on ${appointment["date"]} at ${appointment["time"]} cancelled by user.',
+                                                        'Referral at ${appointment["clinicName"]} on ${appointment["date"]} at ${appointment["time"]} cancelled by user.',
                                                     'createdAt': FieldValue
                                                         .serverTimestamp(),
                                                     'read': false,
@@ -382,14 +381,14 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                                       .showSnackBar(
                                                     const SnackBar(
                                                         content: Text(
-                                                            "Appointment cancelled.")),
+                                                            "Referral cancelled.")),
                                                   );
                                                 } catch (e) {
                                                   ScaffoldMessenger.of(context)
                                                       .showSnackBar(
                                                     const SnackBar(
                                                         content: Text(
-                                                            "Failed to cancel appointment.")),
+                                                            "Failed to cancel Referral.")),
                                                   );
                                                 }
                                               },
@@ -435,14 +434,14 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                                             .showSnackBar(
                                           const SnackBar(
                                               content: Text(
-                                                  "Appointment marked as completed.")),
+                                                  "Referral marked as completed.")),
                                         );
                                       } catch (e) {
                                         ScaffoldMessenger.of(context)
                                             .showSnackBar(
                                           const SnackBar(
                                               content: Text(
-                                                  "Failed to mark appointment as completed.")),
+                                                  "Failed to mark Referral as completed.")),
                                         );
                                       }
                                     },

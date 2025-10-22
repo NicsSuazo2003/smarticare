@@ -77,14 +77,16 @@ class EyeScanService {
       final double healthScore = _scoringService.calculateHealthScore(
         imageScore: normalizedConfidence,
         symptomScore: normalizedSymptomScore,
+        prediction: prediction,
       );
 
       String riskLevel;
-      if (healthScore >= 0.95) {
+      if (healthScore >= 95) {
+        // ✅ Compare to 95, not 0.95
         riskLevel = "Very Low";
-      } else if (healthScore >= 0.80) {
+      } else if (healthScore >= 80) {
         riskLevel = "Low";
-      } else if (healthScore >= 0.60) {
+      } else if (healthScore >= 60) {
         riskLevel = "Medium";
       } else {
         riskLevel = "High";

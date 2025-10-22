@@ -483,108 +483,132 @@ class _LoginScreenState extends State<LoginScreen> {
                           padding: const EdgeInsets.only(right: 8.0),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: const [
-                              Text(
-                                'Welcome to SmartiCare! By using our eye screening and health platform, you agree to these Terms of Service (“Terms”). Please read them carefully.',
-                                style: TextStyle(fontSize: 14, height: 1.6),
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border:
+                                      Border.all(color: Colors.blue.shade200),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.info_outline,
+                                        color: Colors.blue.shade700, size: 20),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Please read carefully before continuing',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blue.shade900,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                              SizedBox(height: 12),
+                              const SizedBox(height: 16),
                               Text(
-                                '1. Use of the App',
+                                'Effective Date: October 1, 2025',
                                 style: TextStyle(
-                                    fontSize: 15, fontWeight: FontWeight.bold),
+                                    fontSize: 14, color: Colors.grey.shade700),
                               ),
-                              SizedBox(height: 8),
-                              Text(
-                                '• The App provides cataract risk assessments and eye health monitoring tools for informational and educational purposes.\n'
-                                '• The App is not a substitute for professional medical diagnosis, advice, or treatment. Always consult a qualified healthcare provider for health concerns.',
-                                style: TextStyle(fontSize: 14, height: 1.6),
-                              ),
-                              SizedBox(height: 12),
-                              Text(
-                                '2. User Account and Responsibilities',
+                              const SizedBox(height: 16),
+
+                              // 1. Acceptance of Terms
+                              const Text(
+                                '1. Acceptance of Terms',
                                 style: TextStyle(
-                                    fontSize: 15, fontWeight: FontWeight.bold),
+                                    fontSize: 16, fontWeight: FontWeight.bold),
                               ),
-                              SizedBox(height: 8),
-                              Text(
-                                '• You must provide accurate and complete information when creating an account.\n'
-                                '• You are responsible for maintaining the confidentiality of your account credentials.\n'
-                                '• You agree not to misuse the App or submit false or harmful information.',
+                              const SizedBox(height: 8),
+                              const Text(
+                                'By using SmartiCare, users agree to comply with these terms. If a user disagrees, they should stop using the app.',
                                 style: TextStyle(fontSize: 14, height: 1.6),
                               ),
-                              SizedBox(height: 12),
-                              Text(
-                                '3. Health Data and Consent',
+                              const SizedBox(height: 16),
+
+                              // 2. Purpose of the Application
+                              const Text(
+                                '2. Purpose of the Application',
                                 style: TextStyle(
-                                    fontSize: 15, fontWeight: FontWeight.bold),
+                                    fontSize: 16, fontWeight: FontWeight.bold),
                               ),
-                              SizedBox(height: 8),
-                              Text(
-                                '• By using the App, you consent to the collection, processing, and storage of your health and personal data as described in our Privacy Policy.\n'
-                                '• You grant us permission to use de-identified data for research and service improvement.',
+                              const SizedBox(height: 8),
+                              const Text(
+                                'SmartiCare is a cataract pre-screening tool developed for public health awareness and early detection support. It is not intended to replace medical consultations or professional diagnosis.',
                                 style: TextStyle(fontSize: 14, height: 1.6),
                               ),
-                              SizedBox(height: 12),
-                              Text(
-                                '4. Intellectual Property',
+                              const SizedBox(height: 16),
+
+                              // 3. User Responsibilities
+                              const Text(
+                                '3. User Responsibilities',
                                 style: TextStyle(
-                                    fontSize: 15, fontWeight: FontWeight.bold),
+                                    fontSize: 16, fontWeight: FontWeight.bold),
                               ),
-                              SizedBox(height: 8),
-                              Text(
-                                '• All content, algorithms, and materials within the App are owned or licensed by SmartiCare and are protected by law.\n'
-                                '• You may not copy, reproduce, or distribute any part of the App without written permission.',
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Users must:',
                                 style: TextStyle(fontSize: 14, height: 1.6),
                               ),
-                              SizedBox(height: 12),
-                              Text(
-                                '5. Limitation of Liability',
+                              const SizedBox(height: 8),
+                              const _Bullet(
+                                  'Use the app only for personal or educational purposes.'),
+                              const _Bullet(
+                                  'Understand that results generated are estimates and should not be treated as final medical assessments.'),
+                              const _Bullet(
+                                  'Consult a certified eye specialist for confirmation of results.'),
+                              const SizedBox(height: 16),
+
+                              // 4. Limitation of Liability
+                              const Text(
+                                '4. Limitation of Liability',
                                 style: TextStyle(
-                                    fontSize: 15, fontWeight: FontWeight.bold),
+                                    fontSize: 16, fontWeight: FontWeight.bold),
                               ),
-                              SizedBox(height: 8),
-                              Text(
-                                '• The App provides preliminary assessments and recommendations only. We are not liable for any decisions you make based on app results.\n'
-                                '• We make no guarantees regarding accuracy or completeness of assessments.\n'
-                                '• To the fullest extent permitted by law, SmartiCare and its affiliates are not responsible for any damages or losses arising from your use of the App.',
+                              const SizedBox(height: 8),
+                              const Text(
+                                'The developers and partner barangay health units are not responsible for:',
                                 style: TextStyle(fontSize: 14, height: 1.6),
                               ),
-                              SizedBox(height: 12),
-                              Text(
-                                '6. Account Termination',
+                              const SizedBox(height: 8),
+                              const _Bullet(
+                                  'Misinterpretation of pre-screening results.'),
+                              const _Bullet(
+                                  'Consequences arising from failure to seek professional care.'),
+                              const _Bullet(
+                                  'Technical issues beyond their control (e.g., internet outages, device errors).'),
+                              const SizedBox(height: 16),
+
+                              // 5. Data Accuracy and Availability
+                              const Text(
+                                '5. Data Accuracy and Availability',
                                 style: TextStyle(
-                                    fontSize: 15, fontWeight: FontWeight.bold),
+                                    fontSize: 16, fontWeight: FontWeight.bold),
                               ),
-                              SizedBox(height: 8),
-                              Text(
-                                '• We reserve the right to suspend or terminate your account for violation of these Terms or misuse of the App.\n'
-                                '• You may delete your account at any time in the app.',
+                              const SizedBox(height: 8),
+                              const Text(
+                                'SmartiCare\'s results depend on the quality of the captured image and device performance. Accuracy may vary depending on camera quality, lighting conditions, and device specifications.',
                                 style: TextStyle(fontSize: 14, height: 1.6),
                               ),
-                              SizedBox(height: 12),
-                              Text(
-                                '7. Modifications and Updates',
+                              const SizedBox(height: 16),
+
+                              // 6. Contact Information
+                              const Text(
+                                '6. Contact Information',
                                 style: TextStyle(
-                                    fontSize: 15, fontWeight: FontWeight.bold),
+                                    fontSize: 16, fontWeight: FontWeight.bold),
                               ),
-                              SizedBox(height: 8),
-                              Text(
-                                '• We may update these Terms from time to time. Significant changes will be notified via the app or by email. Continued use constitutes acceptance.',
+                              const SizedBox(height: 8),
+                              const Text(
+                                'For questions or concerns about this policy, users may contact: smarticare25@gmail.com',
                                 style: TextStyle(fontSize: 14, height: 1.6),
                               ),
-                              SizedBox(height: 12),
-                              Text(
-                                '8. Contact Us',
-                                style: TextStyle(
-                                    fontSize: 15, fontWeight: FontWeight.bold),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'For any questions or concerns about these Terms, please contact: support@smarticare.com',
-                                style: TextStyle(fontSize: 14, height: 1.6),
-                              ),
-                              SizedBox(height: 8),
+                              const SizedBox(height: 16),
                             ],
                           ),
                         ),
@@ -611,7 +635,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         Expanded(
                           child: Text(
                             scrolledToEnd
-                                ? 'I have read and agree to the Terms of Service and Privacy Policy'
+                                ? 'I have read and agree to the Terms of Service'
                                 : 'Scroll to the bottom to enable agreement',
                             style: TextStyle(
                               fontSize: 13,
@@ -626,28 +650,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     // Optional small link to open the full screen Terms page
                     // Links to read full Terms and Privacy Policy
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                  builder: (_) => const PrivacyPolicyScreen()),
-                            );
-                          },
-                          child: const Text('View Privacy Policy'),
+                    // Link to view Privacy Policy
+                    Center(
+                      child: TextButton(
+                        onPressed: _openPrivacyPolicyDialog,
+                        child: const Text(
+                          'View Privacy Policy',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                  builder: (_) => const TermsOfServiceScreen()),
-                            );
-                          },
-                          child: const Text('View Full Terms'),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
@@ -659,8 +673,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 ElevatedButton(
                   onPressed: agreed ? () => Navigator.pop(context, true) : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        Theme.of(context).primaryColor, // background color
+                    foregroundColor: Colors.white, // text (and icon) color
+                  ),
                   child: const Text('Continue'),
-                ),
+                )
               ],
             );
           }),
@@ -668,6 +687,111 @@ class _LoginScreenState extends State<LoginScreen> {
         false;
   }
 
+// Place these two helpers inside _LoginScreenState (below other methods)
+
+  Future<void> _openPrivacyPolicyDialog() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Privacy Policy'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: MediaQuery.of(ctx).size.height * 0.7,
+          child: Scrollbar(
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(right: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Effective Date: October 1, 2025',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Introduction',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'SmartiCare respects the privacy of its users and is committed to protecting personal information. '
+                    'This Privacy Policy explains how the app collects, uses, and safeguards the data provided by users.',
+                    style: TextStyle(height: 1.5),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('1. Information We Collect',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const _Bullet(
+                      'Personal details such as email address for account registration and verification.'),
+                  const _Bullet(
+                      'Assessment results from symptom-based questionnaires and eye image analysis.'),
+                  const _Bullet(
+                      'System-generated data such as timestamps and usage records stored securely in Firebase.'),
+                  const SizedBox(height: 16),
+                  const Text('2. Purpose of Data Collection',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const _Bullet(
+                      'Generate pre-screening results and monitor cataract progression.'),
+                  const _Bullet(
+                      'Improve the accuracy and performance of the system.'),
+                  const _Bullet(
+                      'Provide Barangay Health administrators with summary reports for health monitoring purposes.'),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'SmartiCare does not provide a medical diagnosis. All outputs are for pre-screening and awareness only. '
+                    'Users are encouraged to consult an eye specialist for proper evaluation.',
+                    style: TextStyle(fontStyle: FontStyle.italic, height: 1.5),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('3. Data Storage and Protection',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'All collected data are securely stored in Firebase, with encryption and restricted access to authorized personnel only. '
+                    'No data will be shared with third parties without user consent. Offline data stored on the device is automatically '
+                    'synchronized once an internet connection is available.',
+                    style: TextStyle(height: 1.5),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('4. User Rights',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const _Bullet(
+                      'Access their personal data and assessment history.'),
+                  const _Bullet(
+                      'Request deletion of their account and data at any time.'),
+                  const _Bullet(
+                      'Refuse data collection by uninstalling the app.'),
+                  const SizedBox(height: 16),
+                  const Text('5. Policy Updates',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'This Privacy Policy may be updated as the system improves. Any major changes will be communicated within the app.',
+                    style: TextStyle(height: 1.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+// Small bullet helper widget used in the dialogs above
   @override
   Widget build(BuildContext context) {
     const Color primaryColor = Color(0xFFFF6B6B);
@@ -973,6 +1097,25 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _Bullet extends StatelessWidget {
+  final String text;
+  const _Bullet(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 12, bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(child: Text(text, style: const TextStyle(height: 1.5))),
+        ],
       ),
     );
   }

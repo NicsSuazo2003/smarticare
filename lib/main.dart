@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_1/reminder_model.dart';
+import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'firebase_options.dart';
 import 'screens/login.dart';
 import 'screens/register_screen.dart';
@@ -219,15 +220,9 @@ class ConnectivityProvider extends ChangeNotifier {
 
   Future<void> _syncPendingData() async {
     try {
-      final syncQueue = await Hive.openBox('syncQueueBox');
-      final pendingItems = syncQueue.values.toList();
-
-      for (var item in pendingItems) {
-        print('Syncing: $item');
-      }
-
-      await syncQueue.clear();
-      print('✅ All pending data synced');
+      // ✅ FIX: Actually call the sync service
+      await OfflineSyncService().syncAllPendingData();
+      print('✅ All pending data synced via OfflineSyncService');
     } catch (e) {
       print('❌ Error syncing data: $e');
     }

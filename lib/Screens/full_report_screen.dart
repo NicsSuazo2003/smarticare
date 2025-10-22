@@ -1,3 +1,4 @@
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -202,10 +203,6 @@ class _FullReportScreenState extends State<FullReportScreen> {
 
     final pdfDoc = pw.Document();
 
-    // Optionally add logo: load as Uint8List and use pw.MemoryImage
-    // final logo = await rootBundle.load('assets/logo.png');
-    // final logoImage = pw.MemoryImage(logo.buffer.asUint8List());
-
     pdfDoc.addPage(
       pw.MultiPage(
         margin: const pw.EdgeInsets.all(32),
@@ -220,7 +217,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text('SmartiCare Eye Health Center',
+                  pw.Text('SmartiCare',
                       style: pw.TextStyle(
                         fontSize: 20,
                         fontWeight: pw.FontWeight.bold,
@@ -241,7 +238,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                     borderRadius: pw.BorderRadius.circular(8),
                   ),
                   child: pw.Text(
-                      '#SC${DateTime.now().millisecondsSinceEpoch % 100000}',
+                      '#${_profile?["patientId"] ?? widget.scanId ?? "SC${DateTime.now().millisecondsSinceEpoch % 100000}"}',
                       style: pw.TextStyle(
                           color: PdfColors.teal800,
                           fontWeight: pw.FontWeight.bold))),
@@ -297,7 +294,8 @@ class _FullReportScreenState extends State<FullReportScreen> {
                       pw.Text(
                           'Age: ${_profile?["age"] ?? "N/A"}   Gender: ${_profile?["gender"] ?? "N/A"}',
                           style: const pw.TextStyle(fontSize: 12)),
-                      pw.Text('Patient ID: ${_profile?["patientId"] ?? "-"}',
+                      pw.Text(
+                          'Patient ID: ${(_profile?["patientId"] != null && (_profile!["patientId"] as String).isNotEmpty) ? _profile!["patientId"] : "Not Set"}',
                           style: const pw.TextStyle(fontSize: 12)),
                       pw.Text('Date of Birth: ${_profile?["birthDate"] ?? "-"}',
                           style: const pw.TextStyle(fontSize: 12)),
@@ -342,7 +340,10 @@ class _FullReportScreenState extends State<FullReportScreen> {
           pw.SizedBox(height: 6),
           pw.Row(children: [
             pw.Text('Health Score: ', style: const pw.TextStyle(fontSize: 13)),
-            pw.Text('${scan?['healthScore'] ?? 'N/A'}%',
+            pw.Text(
+                scan?['healthScore'] != null
+                    ? '${(scan!['healthScore'] is double ? scan!['healthScore'].round() : scan!['healthScore'])}%'
+                    : 'N/A',
                 style: pw.TextStyle(
                     fontWeight: pw.FontWeight.bold, color: PdfColors.green800)),
             pw.SizedBox(width: 16),
@@ -361,7 +362,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
           pw.SizedBox(height: 16),
 
           // Section: Recommendations / Tips
-          pw.Text('Evidence-Based Recommendations',
+          pw.Text('Recommendations',
               style: pw.TextStyle(
                   fontWeight: pw.FontWeight.bold,
                   fontSize: 15,
@@ -373,17 +374,9 @@ class _FullReportScreenState extends State<FullReportScreen> {
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
               ...getTipsForPrediction(scan?['prediction'] ?? '').map(
-                (tip) => pw.Row(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('• ',
-                        style: pw.TextStyle(
-                            fontSize: 12, color: PdfColors.teal800)),
-                    pw.Expanded(
-                      child:
-                          pw.Text(tip, style: const pw.TextStyle(fontSize: 12)),
-                    ),
-                  ],
+                (tip) => pw.Padding(
+                  padding: const pw.EdgeInsets.only(bottom: 4),
+                  child: pw.Text(tip, style: const pw.TextStyle(fontSize: 12)),
                 ),
               ),
             ],
@@ -399,7 +392,8 @@ class _FullReportScreenState extends State<FullReportScreen> {
           pw.SizedBox(height: 4),
           pw.Divider(color: PdfColors.teal100),
           pw.SizedBox(height: 4),
-          pw.Text('Phone: ${_profile?["contact"] ?? "N/A"}',
+          pw.Text(
+              'Phone: ${_profile?["phoneNumber"] ?? _profile?["contact"] ?? _profile?["phone"] ?? "N/A"}',
               style: const pw.TextStyle(fontSize: 12)),
           pw.Text('Email: ${_profile?["email"] ?? "N/A"}',
               style: const pw.TextStyle(fontSize: 12)),
@@ -408,25 +402,16 @@ class _FullReportScreenState extends State<FullReportScreen> {
           pw.SizedBox(height: 16),
 
           // Section: Disclaimer
+// Section: Disclaimer
           pw.Container(
             padding: const pw.EdgeInsets.all(10),
             decoration: pw.BoxDecoration(
               color: PdfColors.grey200,
               borderRadius: pw.BorderRadius.circular(8),
             ),
-            child: pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Icon(pw.IconData(0xe88e),
-                    color: PdfColors.grey700, size: 18), // info icon
-                pw.SizedBox(width: 8),
-                pw.Expanded(
-                  child: pw.Text(
-                    'This report is generated based on computer vision analysis and self-reported symptoms. It is not a definitive medical diagnosis and should not replace professional medical advice. Always consult with a qualified eye care specialist for evaluation and treatment.',
-                    style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
-                  ),
-                ),
-              ],
+            child: pw.Text(
+              'This report is generated based on computer vision analysis and self-reported symptoms. It is not a definitive medical diagnosis and should not replace professional medical advice. Always consult with a qualified eye care specialist for evaluation and treatment.',
+              style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700),
             ),
           ),
           pw.SizedBox(height: 16),
@@ -435,7 +420,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
           pw.Center(
             child: pw.Column(
               children: [
-                pw.Text('SmartiCare™ Eye Analysis Platform',
+                pw.Text('SmartiCare Eye',
                     style: pw.TextStyle(
                         fontSize: 13,
                         fontWeight: pw.FontWeight.bold,
@@ -464,10 +449,32 @@ class _FullReportScreenState extends State<FullReportScreen> {
       ),
     );
 
-    await Printing.sharePdf(
-      bytes: await pdfDoc.save(),
-      filename: 'Cataract_Report_${reportDate.replaceAll('-', '')}.pdf',
-    );
+    // Save to device instead of sharing
+    final bytes = await pdfDoc.save();
+
+    // Build a base filename without extension (file_saver adds ext)
+    String baseName = reportDate.isNotEmpty
+        ? 'Cataract_Report_${reportDate.replaceAll('-', '')}'
+        : 'Cataract_Report_${DateTime.now().toUtc().toIso8601String().substring(0, 10).replaceAll('-', '')}';
+
+    try {
+      // Correct usage for FileSaver 0.3.1 with named parameters
+      await FileSaver.instance.saveAs(
+        name: baseName, // required
+        bytes: bytes, // file bytes
+        fileExtension: 'pdf', // required
+        mimeType: MimeType.pdf, // required
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Report saved successfully')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save report: $e')),
+      );
+    }
   }
 
   @override
@@ -591,31 +598,8 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                 ],
                               ),
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.green.shade50,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: Colors.green.shade200,
-                                  width: 1,
-                                ),
-                              ),
-                              child: Text(
-                                'ID: #SC${Random().nextInt(90000) + 10000}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.green.shade800,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
                           ],
                         ),
-                        const SizedBox(height: 16),
                         const Divider(),
                         const SizedBox(height: 16),
                         Row(
@@ -752,7 +736,11 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                                 ),
                                               ),
                                             ),
-                                            if (_profile?["patientId"] != null)
+                                            if (_profile?["patientId"] !=
+                                                    null &&
+                                                (_profile!["patientId"]
+                                                        as String)
+                                                    .isNotEmpty)
                                               Container(
                                                 padding:
                                                     const EdgeInsets.symmetric(
@@ -765,7 +753,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                                       BorderRadius.circular(12),
                                                 ),
                                                 child: Text(
-                                                  "ID: ${_profile?["patientId"]}",
+                                                  "ID: ${_profile!["patientId"]}",
                                                   style: TextStyle(
                                                     fontSize: 12,
                                                     color:
@@ -803,7 +791,10 @@ class _FullReportScreenState extends State<FullReportScreen> {
                               _buildDemographicsRow(
                                 icon: Icons.phone,
                                 label: 'Phone',
-                                value: _profile?["contact"] ?? "N/A",
+                                value: _profile?["phoneNumber"] ??
+                                    _profile?["contact"] ??
+                                    _profile?["phone"] ??
+                                    "N/A",
                                 color: Colors.green,
                               ),
                               const SizedBox(height: 12),
@@ -819,13 +810,6 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                 label: 'Address',
                                 value: _profile?["address"] ?? "N/A",
                                 color: Colors.blue,
-                              ),
-                              const SizedBox(height: 12),
-                              _buildDemographicsRow(
-                                icon: Icons.emergency,
-                                label: 'Emergency',
-                                value: _profile?["emergencyContact"] ?? "N/A",
-                                color: Colors.orange,
                               ),
                             ],
                           ),
@@ -896,7 +880,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                     child: _buildResultMetric(
                                       label: 'Health Score',
                                       value: _scan?['healthScore'] != null
-                                          ? '${_scan!['healthScore']}%'
+                                          ? '${(_scan!['healthScore'] is double ? _scan!['healthScore'].round() : _scan!['healthScore'])}%' // ✅ FIXED: Round if decimal
                                           : 'N/A',
                                       iconColor: cataract
                                           ? Colors.red
@@ -1120,7 +1104,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                     child: Column(
                       children: [
                         const Text(
-                          'SmartiCare™ Eye Analysis Platform',
+                          'SmartiCare Eye',
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,

@@ -2,9 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
+import 'package:flutter_application_1/main.dart';
 import 'package:flutter_application_1/reminder_model.dart';
-import 'package:flutter_application_1/utils/connectivity_service.dart';
+
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'home_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'progress_screen.dart';
@@ -502,9 +504,39 @@ class _ReminderScreenState extends State<ReminderScreen> {
   }
 
   void _openNewReminderDialog() async {
-    final isOnline = await ConnectivityService.showOfflineDialog(context);
-    if (!isOnline) return;
+    // ✅ REPLACED: Use ConnectivityProvider instead of ConnectivityService
+    final connectivityProvider =
+        Provider.of<ConnectivityProvider>(context, listen: false);
+    final isOnline = connectivityProvider.isOnline;
 
+    if (!isOnline) {
+      // Show offline dialog manually
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.wifi_off, color: Colors.red),
+              SizedBox(width: 10),
+              Text('No Internet Connection'),
+            ],
+          ),
+          content: const Text(
+            'This action requires an internet connection. Please check your connection and try again.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Rest of your existing code remains the same...
     final newReminder = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => const _NewReminderDialog(),
@@ -751,28 +783,6 @@ class _ReminderScreenState extends State<ReminderScreen> {
             letterSpacing: 1.2,
           ),
         ),
-        actions: [
-          // Profile Logo to the right
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: GestureDetector(
-              onTap: () {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const ProfileScreen()),
-                  (route) => false,
-                );
-              },
-              child: CircleAvatar(
-                radius: 22,
-                backgroundColor: primaryColor.withOpacity(0.2),
-                child: const Icon(Icons.person,
-                    color: Color(0xFFFF6B6B), size: 26),
-              ),
-            ),
-          ),
-        ],
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

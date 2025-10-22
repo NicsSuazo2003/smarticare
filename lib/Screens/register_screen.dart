@@ -4,11 +4,7 @@ import 'package:flutter_application_1/Screens/symptom_assessment_screen.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:intl/intl.dart'; // For date formatting
 import 'package:firebase_auth/firebase_auth.dart';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-import 'privacy_policy_screen.dart';
-import 'terms_of_service_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -51,29 +47,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _passwordStrengthText = "Weak";
   Color _passwordStrengthColor = Colors.red;
 
-  void _register() {
-    if (_formKey.currentState?.validate() ?? false) {
-      if (!_agreeToTerms) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please agree to the Terms and Conditions'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      setState(() => _isLoading = true);
-
-      // Simulate registration process
-      Future.delayed(const Duration(seconds: 2), () {
-        setState(() => _isLoading = false);
-        // Navigate to login or verification screen
-        Navigator.pushReplacementNamed(context, '/login');
-      });
-    }
-  }
-
   String _getReadableError(FirebaseAuthException e) {
     switch (e.code) {
       case 'weak-password':
@@ -91,323 +64,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  void _registerUser() async {
-    // ✅ Validate form fields
-    if (!_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please fill in all required fields correctly'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // ✅ Check gender selection
-    if (_selectedGender == 'Select Gender') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select your gender'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // ✅ Check date of birth
-    if (_selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select your date of birth'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // ✅ Check terms agreement (double-check)
-    if (!_agreeToTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('You must agree to the Terms and Conditions to register'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      // ✅ Create Firebase Auth user
-      UserCredential userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      // ✅ Send verification email
-      await userCredential.user!.sendEmailVerification();
-
-      // ✅ Save user data to Firestore
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCredential.user!.uid)
-          .set({
-        'firstName': _firstNameController.text.trim(),
-        'middleName': _middleNameController.text.trim(),
-        'lastName': _lastNameController.text.trim(),
-        'gender': _selectedGender,
-        'birthDate': DateFormat('yyyy-MM-dd').format(_selectedDate!),
-        'email': _emailController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'address': _addressController.text.trim(),
-        'city': _cityController.text.trim(),
-        'zipCode': _zipCodeController.text.trim(),
-        'username': _usernameController.text.trim(),
-        'createdAt': '2025-10-14T11:57:20Z', // Current UTC timestamp
-        'role': 'Patient',
-        'emailVerified': false,
-        'status': 'active',
-        'agreedToTerms': true, // ✅ Log that user agreed to terms
-        'agreedToTermsAt': FieldValue.serverTimestamp(),
-      });
-
-      // ✅ Log audit action
-      await AuditLogService.logAction(
-        action: 'user_registered',
-        details:
-            'New user registered: ${_emailController.text.trim()}, Username: ${_usernameController.text.trim()}',
-      );
-
-      // ✅ Create admin notification
-      await FirebaseFirestore.instance.collection('admin_notifications').add({
-        'type': 'new_user',
-        'message':
-            'New user registered: ${_firstNameController.text.trim()} ${_lastNameController.text.trim()} (${_emailController.text.trim()})',
-        'createdAt': FieldValue.serverTimestamp(),
-        'read': false,
-        'relatedUserId': userCredential.user!.uid,
-      });
-
-      // ✅ Show verification dialog
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: const Row(
-              children: [
-                Icon(Icons.mark_email_read, color: Colors.green, size: 28),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Verify Your Email',
-                    style: TextStyle(fontSize: 20),
-                  ),
-                ),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'A verification email has been sent to:',
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.email, color: Colors.blue.shade700, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _emailController.text.trim(),
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.blue.shade900,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.amber.shade200),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.info_outline,
-                          color: Colors.amber.shade700, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Please check your inbox and click the verification link to activate your account before logging in.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.amber.shade900,
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () async {
-                  try {
-                    await userCredential.user!.sendEmailVerification();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Verification email sent again!'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to resend: ${e.toString()}'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                },
-                child: const Text('Resend Email'),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context); // Close dialog
-                  Navigator.pushReplacementNamed(context, '/login');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6B6B),
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Go to Login'),
-              ),
-            ],
-          ),
-        );
-      }
-    } on FirebaseAuthException catch (e) {
-      // ✅ Handle Firebase Auth errors
-      String errorMessage = _getReadableError(e);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    } catch (e) {
-      // ✅ Handle general errors
-      print('Registration error: $e');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Registration failed: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
-    } finally {
-      // ✅ Always reset loading state
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _afterRegisterFlow(BuildContext context, String userId) async {
-    final firestore = FirebaseFirestore.instance;
-
-    // 1. Check for assessment history
-    final assessments = await firestore
-        .collection('users')
-        .doc(userId)
-        .collection('assessments')
-        .limit(1)
-        .get();
-
-    // 2. Check for scan history
-    final scans = await firestore
-        .collection('users')
-        .doc(userId)
-        .collection('scans')
-        .limit(1)
-        .get();
-
-    if (assessments.docs.isEmpty || scans.docs.isEmpty) {
-      // If either is missing, go to the assessment flow
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SymptomAssessmentScreen(
-            onStart: () {
-              // After assessment, go to Eye Scan
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => EyeScanScreen(symptomScore: 0.0),
-                ),
-              );
-            },
-          ),
-        ),
-      );
-    } else {
-      // User already has data, go to Home
-      Navigator.pushReplacementNamed(context, '/home');
-    }
-  }
-
   void _updatePasswordStrength(String password) {
-    // Simple password strength calculation
     double strength = 0;
-
     if (password.isEmpty) {
       strength = 0;
     } else {
-      // Length check
       if (password.length >= 8) strength += 0.25;
-
-      // Contains uppercase
       if (password.contains(RegExp(r'[A-Z]'))) strength += 0.25;
-
-      // Contains number
       if (password.contains(RegExp(r'[0-9]'))) strength += 0.25;
-
-      // Contains special char
-      if (password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
+      if (password.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]')))
         strength += 0.25;
-      }
     }
 
     setState(() {
@@ -434,8 +100,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final DateTime? picked = await showDatePicker(
         context: context,
         initialDate: _selectedDate ??
-            DateTime.now().subtract(
-                const Duration(days: 365 * 18)), // Default to 18 years ago
+            DateTime.now()
+                .subtract(const Duration(days: 365 * 18)), // 18 years ago
         firstDate: DateTime(1900),
         lastDate: DateTime.now(),
         builder: (BuildContext context, Widget? child) {
@@ -451,6 +117,491 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() {
         _selectedDate = picked;
       });
+    }
+  }
+
+  Future<void> _showPrivacyPolicyDialog() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Privacy Policy'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: MediaQuery.of(ctx).size.height * 0.7,
+          child: Scrollbar(
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(right: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Effective Date: October 1, 2025',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('Introduction',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'SmartiCare respects the privacy of its users and is committed to protecting personal information. '
+                    'This Privacy Policy explains how the app collects, uses, and safeguards the data provided by users.',
+                    style: TextStyle(height: 1.5),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('1. Information We Collect',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const _Bullet(
+                      'Personal details such as email address for account registration and verification.'),
+                  const _Bullet(
+                      'Assessment results from symptom-based questionnaires and eye image analysis.'),
+                  const _Bullet(
+                      'System-generated data such as timestamps and usage records stored securely in Firebase.'),
+                  const SizedBox(height: 16),
+                  const Text('2. Purpose of Data Collection',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const _Bullet(
+                      'Generate pre-screening results and monitor cataract progression.'),
+                  const _Bullet(
+                      'Improve the accuracy and performance of the system.'),
+                  const _Bullet(
+                      'Provide Barangay Health administrators with summary reports for health monitoring purposes.'),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'SmartiCare does not provide a medical diagnosis. All outputs are for pre-screening and awareness only. '
+                    'Users are encouraged to consult an eye specialist for proper evaluation.',
+                    style: TextStyle(fontStyle: FontStyle.italic, height: 1.5),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('3. Data Storage and Protection',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'All collected data are securely stored in Firebase, with encryption and restricted access to authorized personnel only. '
+                    'No data will be shared with third parties without user consent. Offline data stored on the device is automatically '
+                    'synchronized once an internet connection is available.',
+                    style: TextStyle(height: 1.5),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('4. User Rights',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const _Bullet(
+                      'Access their personal data and assessment history.'),
+                  const _Bullet(
+                      'Request deletion of their account and data at any time.'),
+                  const _Bullet(
+                      'Refuse data collection by uninstalling the app.'),
+                  const SizedBox(height: 16),
+                  const Text('5. Policy Updates',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'This Privacy Policy may be updated as the system improves. Any major changes will be communicated within the app.',
+                    style: TextStyle(height: 1.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showTermsOfServiceDialog() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Terms of Service'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: MediaQuery.of(ctx).size.height * 0.7,
+          child: Scrollbar(
+            thumbVisibility: true,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(right: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    'Effective Date: October 1, 2025',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                  SizedBox(height: 16),
+                  Text('1. Acceptance of Terms',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text(
+                    'By using SmartiCare, users agree to comply with these terms. If a user disagrees, they should stop using the app.',
+                    style: TextStyle(height: 1.5),
+                  ),
+                  SizedBox(height: 16),
+                  Text('2. Purpose of the Application',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text(
+                    'SmartiCare is a cataract pre-screening tool developed for public health awareness and early detection support. '
+                    'It is not intended to replace medical consultations or professional diagnosis.',
+                    style: TextStyle(height: 1.5),
+                  ),
+                  SizedBox(height: 16),
+                  Text('3. User Responsibilities',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  _Bullet(
+                      'Use the app only for personal or educational purposes.'),
+                  _Bullet(
+                      'Understand that results generated are estimates and should not be treated as final medical assessments.'),
+                  _Bullet(
+                      'Consult a certified eye specialist for confirmation of results.'),
+                  SizedBox(height: 16),
+                  Text('4. Limitation of Liability',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text(
+                      'The developers and partner barangay health units are not responsible for:',
+                      style: TextStyle(height: 1.5)),
+                  _Bullet('Misinterpretation of pre-screening results.'),
+                  _Bullet(
+                      'Consequences arising from failure to seek professional care.'),
+                  _Bullet(
+                      'Technical issues beyond their control (e.g., internet outages, device errors).'),
+                  SizedBox(height: 16),
+                  Text('5. Data Accuracy and Availability',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text(
+                    'SmartiCare\'s results depend on the quality of the captured image and device performance. '
+                    'Accuracy may vary depending on camera quality, lighting conditions, and device specifications.',
+                    style: TextStyle(height: 1.5),
+                  ),
+                  SizedBox(height: 16),
+                  Text('6. Contact Information',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text(
+                    'For questions or concerns about this policy, users may contact: smarticare25@gmail.com',
+                    style: TextStyle(height: 1.5),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _registerUser() async {
+    // Validate form fields
+    if (!_formKey.currentState!.validate()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in all required fields correctly'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Check gender selection
+    if (_selectedGender == 'Select Gender') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select your gender'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Check date of birth
+    if (_selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select your date of birth'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Check terms agreement
+    if (!_agreeToTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('You must agree to the Terms and Conditions to register'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Create Firebase Auth user
+      UserCredential userCredential =
+          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+      );
+
+      // Send verification email
+      await userCredential.user!.sendEmailVerification();
+
+      // Save user data to Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .set({
+        'firstName': _firstNameController.text.trim(),
+        'middleName': _middleNameController.text.trim(),
+        'lastName': _lastNameController.text.trim(),
+        'gender': _selectedGender,
+        'birthDate': DateFormat('yyyy-MM-dd').format(_selectedDate!),
+        'email': _emailController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'address': _addressController.text.trim(),
+        'city': _cityController.text.trim(),
+        'zipCode': _zipCodeController.text.trim(),
+        'username': _usernameController.text.trim(),
+        'createdAt':
+            DateTime.now().toUtc().toIso8601String(), // current UTC timestamp
+        'role': 'Patient',
+        'emailVerified': false,
+        'status': 'active',
+        'agreedToTerms': true,
+        'agreedToTermsAt': FieldValue.serverTimestamp(),
+      });
+
+      // Log audit action
+      await AuditLogService.logAction(
+        action: 'user_registered',
+        details:
+            'New user registered: ${_emailController.text.trim()}, Username: ${_usernameController.text.trim()}',
+      );
+
+      // Create admin notification
+      await FirebaseFirestore.instance.collection('admin_notifications').add({
+        'type': 'new_user',
+        'message':
+            'New user registered: ${_firstNameController.text.trim()} ${_lastNameController.text.trim()} (${_emailController.text.trim()})',
+        'createdAt': FieldValue.serverTimestamp(),
+        'read': false,
+        'relatedUserId': userCredential.user!.uid,
+      });
+
+      if (!mounted) return;
+
+      // Show verification dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.mark_email_read, color: Colors.green, size: 28),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Verify Your Email',
+                  style: TextStyle(fontSize: 20),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'A verification email has been sent to:',
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.email, color: Colors.blue.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _emailController.text.trim(),
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline,
+                        color: Colors.amber.shade700, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Please check your inbox and click the verification link to activate your account before logging in.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.amber.shade900,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                try {
+                  await userCredential.user!.sendEmailVerification();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Verification email sent again!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to resend: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Resend Email'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // Close dialog
+                Navigator.pushReplacementNamed(context, '/login');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6B6B),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Go to Login'),
+            ),
+          ],
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      final errorMessage = _getReadableError(e);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Registration error: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Registration failed: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _afterRegisterFlow(BuildContext context, String userId) async {
+    final firestore = FirebaseFirestore.instance;
+
+    final assessments = await firestore
+        .collection('users')
+        .doc(userId)
+        .collection('assessments')
+        .limit(1)
+        .get();
+
+    final scans = await firestore
+        .collection('users')
+        .doc(userId)
+        .collection('scans')
+        .limit(1)
+        .get();
+
+    if (assessments.docs.isEmpty || scans.docs.isEmpty) {
+      // If either is missing, go to the assessment flow
+      // Not currently called, but kept for completeness
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SymptomAssessmentScreen(
+            onStart: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => EyeScanScreen(symptomScore: 0.0),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
     }
   }
 
@@ -470,13 +621,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     // Account Security
     _usernameController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
-
-    _firstNameController.dispose();
-    _middleNameController.dispose();
-    _lastNameController.dispose();
-    _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
 
@@ -661,7 +805,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               children: [
                                 Icon(Icons.calendar_today,
                                     color: Colors.grey.shade600),
-                                const SizedBox(width: 16),
+                                const SizedBox(height: 0, width: 16),
                                 Expanded(
                                   child: Text(
                                     _selectedDate == null
@@ -708,7 +852,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           keyboardType: TextInputType.emailAddress,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
-                              return 'Email is required';
+                              return 'Enter a valid email';
                             }
                             if (!RegExp(r"^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$")
                                 .hasMatch(value)) {
@@ -866,9 +1010,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                           ),
                           obscureText: _obscurePassword,
-                          onChanged: (value) {
-                            _updatePasswordStrength(value);
-                          },
+                          onChanged: _updatePasswordStrength,
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return 'Password is required';
@@ -931,7 +1073,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                         const SizedBox(height: 24),
 
-                        // Terms and Conditions with detailed text
                         // Terms and Conditions with detailed text and links
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -968,7 +1109,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ],
                             ),
                             const SizedBox(height: 8),
-                            // Links to read Terms and Privacy Policy
+                            // Links to read Terms and Privacy Policy (show as dialogs)
                             Row(
                               children: [
                                 const SizedBox(
@@ -978,15 +1119,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     spacing: 16,
                                     children: [
                                       GestureDetector(
-                                        onTap: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  const TermsOfServiceScreen(),
-                                            ),
-                                          );
-                                        },
+                                        onTap: _showTermsOfServiceDialog,
                                         child: Text(
                                           'Read Terms of Service',
                                           style: TextStyle(
@@ -999,15 +1132,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         ),
                                       ),
                                       GestureDetector(
-                                        onTap: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  const PrivacyPolicyScreen(),
-                                            ),
-                                          );
-                                        },
+                                        onTap: _showPrivacyPolicyDialog,
                                         child: Text(
                                           'Read Privacy Policy',
                                           style: TextStyle(
@@ -1030,50 +1155,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         const SizedBox(height: 30),
 
                         // Register Button
-                        // Register Button
                         SizedBox(
                           width: double.infinity,
                           height: 58,
                           child: ElevatedButton(
-                            onPressed: (_isLoading ||
-                                    !_agreeToTerms) // ✅ Disabled if not agreed
+                            onPressed: (_isLoading || !_agreeToTerms)
                                 ? null
                                 : () async {
-                                    if (!_formKey.currentState!.validate())
-                                      return;
-
-                                    // ✅ Extra validation check
-                                    if (!_agreeToTerms) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                              'You must agree to the Terms and Conditions to register'),
-                                          backgroundColor: Colors.red,
-                                          duration: Duration(seconds: 3),
-                                        ),
-                                      );
-                                      return;
-                                    }
-
-                                    setState(() {
-                                      _isLoading = true;
-                                    });
-
-                                    try {
-                                      _registerUser();
-                                    } finally {
-                                      if (mounted) {
-                                        setState(() {
-                                          _isLoading = false;
-                                        });
-                                      }
-                                    }
+                                    await _registerUser();
                                   },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _agreeToTerms
                                   ? primaryColor
-                                  : Colors.grey.shade300, // ✅ Visual feedback
+                                  : Colors.grey.shade300,
                               foregroundColor: _agreeToTerms
                                   ? Colors.white
                                   : Colors.grey.shade500,
@@ -1095,7 +1189,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 : Text(
                                     _agreeToTerms
                                         ? 'Create Account'
-                                        : 'Agree to Terms to Continue', // ✅ Dynamic text
+                                        : 'Agree to Terms to Continue',
                                     style: const TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.w600,
@@ -1104,7 +1198,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-// Back to Login
+
+                        // Back to Login
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -1133,7 +1228,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ],
                         ),
                         const SizedBox(height: 20),
-                        // Back to Login
                       ],
                     ),
                   ),
@@ -1146,7 +1240,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // Helper methods
+  // Helper widgets/builders
   Widget _buildSectionHeader(String title, Color primaryColor) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1278,6 +1372,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       obscureText: obscureText,
       validator: validator,
+    );
+  }
+}
+
+class _Bullet extends StatelessWidget {
+  final String text;
+  const _Bullet(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 12, bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(child: Text(text, style: const TextStyle(height: 1.5))),
+        ],
+      ),
     );
   }
 }

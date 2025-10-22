@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_application_1/Screens/home_screen.dart';
 
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/screens/login.dart';
@@ -160,25 +161,25 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         .get();
 
     if (assessments.docs.isEmpty || scans.docs.isEmpty) {
-      // If either is missing, go to the assessment flow
-      Navigator.pushReplacement(
+      // Clear the entire stack and start fresh with assessment flow
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
           builder: (context) => SymptomAssessmentScreen(
             onStart: () {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => EyeScanScreen(symptomScore: 0.0),
-                ),
-              );
+              // Don't navigate here - let the assessment screen handle it
             },
           ),
         ),
+        (route) => false, // Clear entire stack
       );
     } else {
-      // User already has data, go to Home (use named route)
-      Navigator.pushReplacementNamed(context, '/home');
+      // User already has data, go to Home
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        (route) => false, // Clear entire stack
+      );
     }
   }
 
@@ -347,9 +348,15 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   height: 48,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _submit,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor, // background color
+                      foregroundColor: Colors.white, // text & icon color
+                    ),
                     child: _isLoading
                         ? const CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2)
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          )
                         : const Text('Complete Registration'),
                   ),
                 ),

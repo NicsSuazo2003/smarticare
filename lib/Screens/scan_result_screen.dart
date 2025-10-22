@@ -66,6 +66,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       final double computedHealthScore = scoringService.calculateHealthScore(
         imageScore: widget.confidence,
         symptomScore: widget.symptomScore,
+        prediction: widget.prediction,
       );
 
       String riskLevel = "";
@@ -83,7 +84,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         'eye': widget.eye,
         'imageUrl': widget.imageUrl,
         'prediction': widget.prediction,
-        'healthScore': computedHealthScore,
+        'healthScore': computedHealthScore.round(),
         'symptomScore': widget.symptomScore,
         'scanDate': widget.scanDate,
         'riskLevel': riskLevel,
@@ -339,6 +340,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     final double computedHealthScore = scoringService.calculateHealthScore(
       imageScore: widget.confidence,
       symptomScore: widget.symptomScore,
+      prediction: widget.prediction,
     );
 
     final isGuest = Provider.of<UserSessionProvider>(context).isGuest;
@@ -666,8 +668,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                       Expanded(
                                         flex: 1,
                                         child: Text(
-                                          computedHealthScore
-                                              .toStringAsFixed(2),
+                                          '${computedHealthScore.round()}%',
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 16,
