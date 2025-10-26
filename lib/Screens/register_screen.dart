@@ -670,10 +670,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             color: primaryColor.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: const Icon(
-                            Icons.remove_red_eye,
-                            size: 35,
-                            color: primaryColor,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.asset(
+                              'assets/images/icon.png',
+                              fit: BoxFit.cover,
+                              width: 80,
+                              height: 80,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -695,6 +699,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ],
                     ),
                   ),
+
                   const SizedBox(height: 24),
 
                   // Form

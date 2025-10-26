@@ -1,38 +1,32 @@
-// Create this file in your project if you haven't already
 class LatestScanCache {
-  // Static variables to hold the latest scan data
   static String leftEyePrediction = '';
-  static double leftEyeConfidence = 0.0;
+  static double leftEyeHealthScore = 0.0; // ✅ Changed from confidence
   static String rightEyePrediction = '';
-  static double rightEyeConfidence = 0.0;
+  static double rightEyeHealthScore = 0.0; // ✅ Changed from confidence
 
-  // Method to update left eye data
-  static void updateLeftEye(String prediction, double confidence) {
+  static void updateLeftEye(String prediction, double healthScore) {
     leftEyePrediction = prediction;
-    leftEyeConfidence = confidence;
-    print('Updated LatestScanCache for left eye: $prediction, $confidence');
+    leftEyeHealthScore = healthScore; // ✅ Now stores 0-100 score
+    print('✅ Cache updated - Left eye: $prediction, Health: $healthScore%');
   }
 
-  // Method to update right eye data
-  static void updateRightEye(String prediction, double confidence) {
+  static void updateRightEye(String prediction, double healthScore) {
     rightEyePrediction = prediction;
-    rightEyeConfidence = confidence;
-    print('Updated LatestScanCache for right eye: $prediction, $confidence');
+    rightEyeHealthScore = healthScore; // ✅ Now stores 0-100 score
+    print('✅ Cache updated - Right eye: $prediction, Health: $healthScore%');
   }
 
-  // Method to check if we have data
   static bool hasEyeData(bool isLeftEye) {
     return isLeftEye
-        ? leftEyeConfidence > 0 && leftEyePrediction.isNotEmpty
-        : rightEyeConfidence > 0 && rightEyePrediction.isNotEmpty;
+        ? leftEyeHealthScore > 0 && leftEyePrediction.isNotEmpty
+        : rightEyeHealthScore > 0 && rightEyePrediction.isNotEmpty;
   }
 
-  // Method to clear all cache data (useful for logout)
   static void clearCache() {
     leftEyePrediction = '';
-    leftEyeConfidence = 0.0;
+    leftEyeHealthScore = 0.0;
     rightEyePrediction = '';
-    rightEyeConfidence = 0.0;
-    print('Cache cleared');
+    rightEyeHealthScore = 0.0;
+    print('🗑️ Cache cleared');
   }
 }

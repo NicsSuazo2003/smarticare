@@ -4,6 +4,144 @@ import 'package:firebase_auth/firebase_auth.dart';
 class SecurityService {
   static const int MAX_FAILED_ATTEMPTS = 5;
   static const int LOCKOUT_MINUTES = 15;
+  // Add this method to the SecurityService class
+
+  /// Rate limit password reset requests
+  /// Limits: 3 attempts per email per hour
+  static Future<bool> canRequestPasswordReset(String email) async {
+    try {
+      final now = DateTime.now();
+      final doc = await FirebaseFirestore.instance
+          .collection('password_reset_limits')
+          .doc(email.toLowerCase())
+          .get();
+
+      if (!doc.exists) {
+        // First request, allow it
+        await FirebaseFirestore.instance
+            .collection('password_reset_limits')
+            .doc(email.toLowerCase())
+            .set({
+          'email': email.toLowerCase(),
+          'attempts': 1,
+          'windowStart': Timestamp.fromDate(now),
+          'lastAttempt': Timestamp.fromDate(now),
+        });
+        return true;
+      }
+
+      final data = doc.data()!;
+      final attempts = (data['attempts'] as int?) ?? 0;
+      final windowStart = (data['windowStart'] as Timestamp?)?.toDate() ?? now;
+      final lastAttempt = (data['lastAttempt'] as Timestamp?)?.toDate() ?? now;
+
+      // Check if window has expired (1 hour)
+      if (now.difference(windowStart).inHours >= 1) {
+        // Reset window
+        await doc.reference.update({
+          'attempts': 1,
+          'windowStart': Timestamp.fromDate(now),
+          'lastAttempt': Timestamp.fromDate(now),
+        });
+        return true;
+      }
+
+      // Check if too many attempts within window
+      if (attempts >= 3) {
+        // Log suspicious activity
+        await logSecurityEvent(
+          action: 'password_reset_rate_limit_exceeded',
+          email: email,
+          details: 'User exceeded password reset rate limit',
+          severity: 'MEDIUM',
+        );
+        return false;
+      }
+
+      // Check minimum time between requests (5 minutes)
+      if (now.difference(lastAttempt).inMinutes < 5) {
+        return false;
+      }
+
+      // Increment attempts
+      await doc.reference.update({
+        'attempts': attempts + 1,
+        'lastAttempt': Timestamp.fromDate(now),
+      });
+
+      return true;
+    } catch (e) {
+      print('❌ Error checking password reset rate limit: $e');
+      return false; // Fail secure - deny request on error
+    }
+  }
+
+  /// Get remaining cooldown time for password reset
+  static Future<Duration?> getPasswordResetCooldown(String email) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('password_reset_limits')
+          .doc(email.toLowerCase())
+          .get();
+
+      if (!doc.exists) return null;
+
+      final data = doc.data()!;
+      final attempts = (data['attempts'] as int?) ?? 0;
+      final windowStart = (data['windowStart'] as Timestamp?)?.toDate();
+      final lastAttempt = (data['lastAttempt'] as Timestamp?)?.toDate();
+
+      if (windowStart == null) return null;
+
+      final now = DateTime.now();
+
+      // If max attempts reached, return time until window expires
+      if (attempts >= 3) {
+        final windowEnd = windowStart.add(const Duration(hours: 1));
+        if (now.isBefore(windowEnd)) {
+          return windowEnd.difference(now);
+        }
+      }
+
+      // Check minimum time between requests
+      if (lastAttempt != null) {
+        final nextAllowedTime = lastAttempt.add(const Duration(minutes: 5));
+        if (now.isBefore(nextAllowedTime)) {
+          return nextAllowedTime.difference(now);
+        }
+      }
+
+      return null;
+    } catch (e) {
+      print('❌ Error getting password reset cooldown: $e');
+      return null;
+    }
+  }
+
+  /// Clean up expired password reset rate limits (call periodically)
+  static Future<void> cleanupPasswordResetLimits() async {
+    try {
+      final oneHourAgo = Timestamp.fromDate(
+        DateTime.now().subtract(const Duration(hours: 1)),
+      );
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('password_reset_limits')
+          .where('windowStart', isLessThan: oneHourAgo)
+          .get();
+
+      final batch = FirebaseFirestore.instance.batch();
+      for (var doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+
+      print(
+          '✅ Cleaned up ${snapshot.docs.length} expired password reset limits');
+    } catch (e) {
+      print('❌ Error cleaning up password reset limits: $e');
+    }
+  }
 
   /// Check if account is currently locked
   static Future<bool> isAccountLocked(String email) async {
@@ -34,6 +172,101 @@ class SecurityService {
     }
   }
 
+  /// Detect and alert on suspicious activities
+  static Future<void> checkSuspiciousActivity({
+    required String email,
+    required String action,
+    String? ipAddress,
+    String? userAgent,
+  }) async {
+    try {
+      final now = DateTime.now();
+
+      // Get recent activity for this user
+      final recentActivity = await FirebaseFirestore.instance
+          .collection('security_audit_logs')
+          .where('email', isEqualTo: email)
+          .where('timestamp',
+              isGreaterThan:
+                  Timestamp.fromDate(now.subtract(Duration(hours: 1))))
+          .orderBy('timestamp', descending: true)
+          .limit(10)
+          .get();
+
+      final activities = recentActivity.docs;
+
+      // Check for multiple failed attempts in short time
+      final failedAttempts = activities
+          .where((doc) => doc['action'] == 'failed_login_attempt')
+          .length;
+
+      if (failedAttempts >= 3) {
+        await sendSecurityAlert(
+          email: email,
+          subject: 'Suspicious Activity Detected - SmartiCare',
+          body:
+              'Multiple failed login attempts detected for your account. If this was not you, please secure your account immediately.',
+        );
+      }
+
+      // Log the current activity
+      await logSecurityEvent(
+        action: action,
+        email: email,
+        details: 'User activity: $action from IP: $ipAddress',
+        severity: failedAttempts >= 2 ? 'MEDIUM' : 'LOW',
+      );
+    } catch (e) {
+      print('❌ Error checking suspicious activity: $e');
+    }
+  }
+
+  /// Check for new device/login location
+  static Future<void> checkNewDeviceLogin({
+    required String email,
+    required String userId,
+    String? deviceInfo,
+  }) async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+        final knownDevices = userData['knownDevices'] ?? [];
+
+        if (!knownDevices.contains(deviceInfo)) {
+          // New device detected
+          await sendSecurityAlert(
+            email: email,
+            subject: 'New Login Device - SmartiCare',
+            body:
+                'A new device has been used to access your SmartiCare account. Device: $deviceInfo\n\nIf this was not you, please change your password immediately.',
+          );
+
+          // Add to known devices
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .update({
+            'knownDevices': FieldValue.arrayUnion([deviceInfo]),
+          });
+
+          await logSecurityEvent(
+            action: 'new_device_login',
+            email: email,
+            details: 'Login from new device: $deviceInfo',
+            severity: 'MEDIUM',
+          );
+        }
+      }
+    } catch (e) {
+      print('❌ Error checking new device: $e');
+    }
+  }
+
   /// Record a failed login attempt
   static Future<void> recordFailedAttempt(String email) async {
     try {
@@ -50,7 +283,6 @@ class SecurityService {
           'lastAttempt': FieldValue.serverTimestamp(),
           'lockedUntil': null,
           'isLocked': false,
-          'createdAt': FieldValue.serverTimestamp(),
         });
       } else {
         final data = docSnapshot.data() as Map<String, dynamic>;
@@ -66,6 +298,7 @@ class SecurityService {
             'lastAttempt': FieldValue.serverTimestamp(),
             'lockedUntil': lockUntil,
             'isLocked': true,
+            'lockedAt': FieldValue.serverTimestamp(),
           });
 
           // ✅ Log security event
@@ -74,6 +307,24 @@ class SecurityService {
             email: email,
             details: 'Account locked after $currentAttempts failed attempts',
             severity: 'HIGH',
+          );
+
+          // ✅ Send alert email
+          await sendSecurityAlert(
+            email: email,
+            subject: 'Security Alert: Your Account Was Locked',
+            body: '''
+Your SmartiCare account has been temporarily locked due to multiple failed login attempts.
+
+Details:
+- Failed Attempts: $currentAttempts
+- Locked Until: ${lockUntil.toString()}
+- Lockout Duration: $LOCKOUT_MINUTES minutes
+
+If this wasn't you, please contact support immediately at support@smarticare.ph
+
+Your SmartiCare Security Team
+            ''',
           );
 
           return;
@@ -113,7 +364,7 @@ class SecurityService {
       await logSecurityEvent(
         action: 'login_successful',
         email: email,
-        details: 'Successful login',
+        details: 'Successful login - failed attempts reset',
         severity: 'LOW',
       );
     } catch (e) {
@@ -144,23 +395,21 @@ class SecurityService {
     }
   }
 
-  /// Get remaining failed attempts
-  static Future<int> getRemainingAttempts(String email) async {
+  /// Get number of failed attempts
+  static Future<int> getFailedAttempts(String email) async {
     try {
       final doc = await FirebaseFirestore.instance
           .collection('security_logs')
           .doc(email)
           .get();
 
-      if (!doc.exists) return MAX_FAILED_ATTEMPTS;
+      if (!doc.exists) return 0;
 
       final data = doc.data() as Map<String, dynamic>;
-      int failedAttempts = (data['failedAttempts'] as int?) ?? 0;
-
-      return MAX_FAILED_ATTEMPTS - failedAttempts;
+      return (data['failedAttempts'] as int?) ?? 0;
     } catch (e) {
-      print('❌ Error getting remaining attempts: $e');
-      return MAX_FAILED_ATTEMPTS;
+      print('❌ Error getting failed attempts: $e');
+      return 0;
     }
   }
 
@@ -169,8 +418,7 @@ class SecurityService {
     required String action,
     required String email,
     required String details,
-    required String severity, // LOW, MEDIUM, HIGH, CRITICAL
-    String? scanId,
+    required String severity,
   }) async {
     try {
       await FirebaseFirestore.instance.collection('security_audit_logs').add({
@@ -179,7 +427,7 @@ class SecurityService {
         'details': details,
         'severity': severity,
         'timestamp': FieldValue.serverTimestamp(),
-        'scanId': scanId,
+        'userType': 'patient', // Distinguish from admin logs
       });
 
       print('✅ Security event logged: $action');
@@ -188,7 +436,7 @@ class SecurityService {
     }
   }
 
-  /// Send security alert email (queued for Cloud Function processing)
+  /// Send security alert email
   static Future<void> sendSecurityAlert({
     required String email,
     required String subject,
@@ -210,24 +458,6 @@ class SecurityService {
     }
   }
 
-  /// Check 2FA status for user
-  static Future<bool> is2FAEnabled(String userId) async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .get();
-
-      if (!doc.exists) return false;
-
-      final data = doc.data() as Map<String, dynamic>;
-      return data['twoFactorEnabled'] ?? false;
-    } catch (e) {
-      print('❌ Error checking 2FA status: $e');
-      return false;
-    }
-  }
-
   /// Enable 2FA for user
   static Future<void> enable2FA(String userId) async {
     try {
@@ -238,34 +468,37 @@ class SecurityService {
 
       await logSecurityEvent(
         action: 'two_factor_enabled',
-        email: '', // Will be fetched from user context
+        email: '',
         details: 'User enabled two-factor authentication',
         severity: 'LOW',
       );
 
-      print('✅ 2FA enabled for user $userId');
+      print('✅ 2FA enabled for user: $userId');
     } catch (e) {
       print('❌ Error enabling 2FA: $e');
     }
   }
 
-  /// Disable 2FA for user
-  static Future<void> disable2FA(String userId) async {
+  /// Get login activity for user
+  static Future<List<Map<String, dynamic>>> getLoginActivity(
+    String email, {
+    int limit = 10,
+  }) async {
     try {
-      await FirebaseFirestore.instance.collection('users').doc(userId).update({
-        'twoFactorEnabled': false,
-      });
+      final snapshot = await FirebaseFirestore.instance
+          .collection('security_audit_logs')
+          .where('email', isEqualTo: email)
+          .where('action', isEqualTo: 'login_successful')
+          .orderBy('timestamp', descending: true)
+          .limit(limit)
+          .get();
 
-      await logSecurityEvent(
-        action: 'two_factor_disabled',
-        email: '',
-        details: 'User disabled two-factor authentication',
-        severity: 'LOW',
-      );
-
-      print('✅ 2FA disabled for user $userId');
+      return snapshot.docs
+          .map((doc) => doc.data() as Map<String, dynamic>)
+          .toList();
     } catch (e) {
-      print('❌ Error disabling 2FA: $e');
+      print('❌ Error fetching login activity: $e');
+      return [];
     }
   }
 }

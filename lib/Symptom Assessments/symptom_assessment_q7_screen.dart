@@ -9,7 +9,9 @@ import 'package:flutter_application_1/Screens/eye_scan_screen.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:provider/provider.dart';
 import '../screens/symptom_assessment_provider.dart';
-import 'package:connectivity_plus/connectivity_plus.dart'; // Add this import at the top
+import 'package:connectivity_plus/connectivity_plus.dart';
+
+import '../services/offline_sync_service.dart'; // Add this import at the top
 
 class SymptomAssessmentQ7Screen extends StatefulWidget {
   final Function(String) onAnswer;
@@ -126,7 +128,6 @@ class _SymptomAssessmentQ7ScreenState extends State<SymptomAssessmentQ7Screen> {
       final double symptomScore = assessmentProvider.getSymptomScore();
 
       // Normalize risk (canonical token) based on symptomScore
-      // You can tweak thresholds as needed
       String normalizedRisk;
       if (symptomScore >= 0.7) {
         normalizedRisk = 'High';
@@ -174,20 +175,6 @@ class _SymptomAssessmentQ7ScreenState extends State<SymptomAssessmentQ7Screen> {
         }
       }
 
-      // Prepare payload with full answers + generated notes + canonical riskLevel
-      final payload = {
-        'answers': allAnswers,
-        'score': symptomScore,
-        'conclusion': conclusionText,
-        'riskLevel': normalizedRisk, // canonical token for filtering
-        'completed': true,
-        'scanDate': DateTime.now().toUtc().toString().split('.').first,
-        'timestamp': FieldValue.serverTimestamp(),
-        'patientId': userId ?? '',
-        'patientName': patientName,
-        'notes': clinicalSummary,
-      };
-
       // Check connectivity quickly
       bool isOnline = false;
       try {
@@ -201,31 +188,42 @@ class _SymptomAssessmentQ7ScreenState extends State<SymptomAssessmentQ7Screen> {
 
       if (isOnline && userId != null) {
         try {
-          // Save with short timeout (non-blocking if slow)
+          // ✅ ONLINE: Use Firestore timestamp
+          final onlinePayload = {
+            'answers': allAnswers,
+            'score': symptomScore,
+            'conclusion': conclusionText,
+            'riskLevel': normalizedRisk,
+            'completed': true,
+            'scanDate': DateTime.now().toUtc().toString().split('.').first,
+            'timestamp': FieldValue.serverTimestamp(), // Firestore timestamp
+            'patientId': userId,
+            'patientName': patientName,
+            'notes': clinicalSummary,
+          };
+
+          // Save with short timeout
           await _firestore
               .collection('users')
               .doc(userId)
               .collection('assessments')
-              .add(payload)
+              .add(onlinePayload)
               .timeout(const Duration(seconds: 2));
-          print('✅ Assessment saved to Firestore with payload: $payload');
+          print('✅ Assessment saved to Firestore');
         } catch (e) {
-          print('⚠️ Failed to save assessment (proceeding anyway): $e');
-          // Attempt a background save that won't block navigation
-          _saveAssessmentInBackground(allAnswers, symptomScore, conclusionText,
-              patientName, userId, clinicalSummary, normalizedRisk);
+          print('⚠️ Failed to save assessment online, saving offline: $e');
+          // Save offline version
+          await _saveAssessmentOffline(allAnswers, symptomScore, conclusionText,
+              normalizedRisk, patientName, userId, clinicalSummary);
         }
       } else {
-        print('📴 Offline or no user - queuing background save if possible');
-        // Start background save if userId present (best-effort)
+        print('📴 Offline - saving assessment to offline queue');
+        // ✅ OFFLINE: Save with regular timestamp
         if (userId != null) {
-          _saveAssessmentInBackground(allAnswers, symptomScore, conclusionText,
-              patientName, userId, clinicalSummary, normalizedRisk);
+          await _saveAssessmentOffline(allAnswers, symptomScore, conclusionText,
+              normalizedRisk, patientName, userId, clinicalSummary);
         }
       }
-
-      // Optionally clear provider answers after save if you don't need to reuse them
-      // assessmentProvider.clear();
 
       // Navigate to EyeScanScreen always
       if (mounted) {
@@ -256,44 +254,35 @@ class _SymptomAssessmentQ7ScreenState extends State<SymptomAssessmentQ7Screen> {
     }
   }
 
-// Background save now accepts patient info and clinical summary and normalizedRisk; tolerant to timeouts.
-  void _saveAssessmentInBackground(
+// ✅ NEW: Helper method to save assessment offline
+  Future<void> _saveAssessmentOffline(
     Map<String, String> allAnswers,
     double symptomScore,
     String conclusionText,
-    String patientName,
-    String? patientId,
-    String clinicalSummary,
     String normalizedRisk,
-  ) {
-    Future(() async {
-      if (patientId == null || patientId.isEmpty) return;
-      try {
-        final payload = {
-          'answers': allAnswers,
-          'score': symptomScore,
-          'conclusion': conclusionText,
-          'riskLevel':
-              normalizedRisk, // <-- ensure canonical token is saved even in background
-          'completed': true,
-          'scanDate': DateTime.now().toUtc().toString().split('.').first,
-          'timestamp': FieldValue.serverTimestamp(),
-          'patientId': patientId,
-          'patientName': patientName,
-          'notes': clinicalSummary,
-        };
-        await _firestore
-            .collection('users')
-            .doc(patientId)
-            .collection('assessments')
-            .add(payload)
-            .timeout(const Duration(seconds: 3));
-        print('✅ Background assessment saved: $payload');
-      } catch (e) {
-        print('⚠️ Background save failed (not blocking UI): $e');
-      }
-    });
+    String patientName,
+    String userId,
+    String clinicalSummary,
+  ) async {
+    // ✅ OFFLINE: Use regular DateTime (Hive compatible)
+    final offlinePayload = {
+      'answers': allAnswers,
+      'score': symptomScore,
+      'conclusion': conclusionText,
+      'riskLevel': normalizedRisk,
+      'completed': true,
+      'scanDate': DateTime.now().toUtc().toString().split('.').first,
+      'timestamp':
+          DateTime.now().toUtc().toString(), // Regular string timestamp
+      'patientId': userId,
+      'patientName': patientName,
+      'notes': clinicalSummary,
+    };
+
+    await OfflineSyncService().saveAssessmentOffline(offlinePayload);
   }
+
+// Background save now accepts patient info and clinical summary and normalizedRisk; tolerant to timeouts.
 
   @override
   Widget build(BuildContext context) {

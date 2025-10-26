@@ -2,7 +2,7 @@ name: flutter_application_1
 description: "A new Flutter project."
 publish_to: "none"
 
-version: 1.0.3+1
+version: 1.0.6+1
 
 environment:
   sdk: ^3.5.4
@@ -75,4 +75,4 @@ flutter:
   uses-material-design: true
   assets:
     - assets/model/cataract_model.tflite
-    - assets/images/
+    - assets/images/  

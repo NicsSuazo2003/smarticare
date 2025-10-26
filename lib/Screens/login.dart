@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/Screens/complete_profile_screen.dart';
@@ -6,6 +8,8 @@ import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
 import 'package:flutter_application_1/Screens/symptom_assessment_screen.dart';
 import 'package:flutter_application_1/Screens/terms_of_service_screen.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
+import 'package:flutter_application_1/services/otp_service.dart';
+import 'package:flutter_application_1/services/security_service.dart';
 import 'package:flutter_svg/svg.dart';
 import 'app_permission_screen.dart';
 import 'package:provider/provider.dart';
@@ -15,6 +19,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import 'otp_verification_screen.dart';
 import 'privacy_policy_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -106,12 +111,43 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // Update the _login() method in login.dart
+  // Find the _login() method and update after successful authentication:
+
   void _login() async {
     if (_formKey.currentState?.validate() ?? false) {
       setState(() => _isLoading = true);
 
       try {
         _formKey.currentState!.save();
+
+        // ✅ CHECK IF ACCOUNT IS LOCKED
+        if (await SecurityService.isAccountLocked(_email)) {
+          final remainingMinutes =
+              await SecurityService.getRemainingLockoutMinutes(_email);
+          setState(() => _isLoading = false);
+          _showSnackBar(
+            'Account temporarily locked due to too many failed attempts. Try again in $remainingMinutes minutes.',
+            color: Colors.orange,
+          );
+          return;
+        }
+        // Add this RIGHT AFTER the account lockout check and BEFORE authentication
+        try {
+          final signInMethods =
+              await FirebaseAuth.instance.fetchSignInMethodsForEmail(_email);
+
+          if (signInMethods.isNotEmpty &&
+              signInMethods.contains('google.com') &&
+              !signInMethods.contains('password')) {
+            setState(() => _isLoading = false);
+            _showGoogleAccountDialog(); // You already have this method
+            return;
+          }
+        } catch (e) {
+          print('Error checking sign-in methods: $e');
+          // Continue with normal flow if this fails
+        }
 
         // Authenticate
         UserCredential userCredential =
@@ -123,6 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
         // ✅ CHECK EMAIL VERIFICATION
         if (!userCredential.user!.emailVerified) {
           await FirebaseAuth.instance.signOut();
+          await SecurityService.recordFailedAttempt(_email);
 
           showDialog(
             context: context,
@@ -165,28 +202,100 @@ class _LoginScreenState extends State<LoginScreen> {
           setState(() => _isLoading = false);
           return;
         }
-        LatestScanCache.clearCache();
 
-        // ✅ CHECK AND REACTIVATE USER STATUS
-        await _checkAndReactivateUser(userCredential.user!.uid);
+        // ✅ CHECK IF 2FA IS ENABLED
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .get();
 
-        await AuditLogService.logAction(
-          action: 'login',
-          details: 'User logged in with email: $_email',
-        );
+        final userData = userDoc.data() as Map<String, dynamic>?;
+        final twoFactorEnabled = userData?['twoFactorEnabled'] ?? false;
 
-        // Continue with normal login flow
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          await saveTokenToFirestore(user.uid);
-          await _afterLoginFlow(context, user.uid);
+        setState(() => _isLoading = false);
+
+        if (twoFactorEnabled) {
+          // ✅ SEND OTP
+          final otpSent = await OTPService.sendOTP(_email);
+
+          if (!otpSent) {
+            _showSnackBar('Failed to send verification code',
+                color: Colors.red);
+            await FirebaseAuth.instance.signOut();
+            return;
+          }
+
+          // ✅ SHOW OTP VERIFICATION SCREEN
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => OTPVerificationScreen(
+                email: _email,
+                onVerified: () async {
+                  // OTP verified - complete login
+                  await _completeLogin(userCredential);
+                },
+              ),
+            ),
+          );
+        } else {
+          // No 2FA - complete login directly
+          await _completeLogin(userCredential);
         }
       } on FirebaseAuthException catch (e) {
-        // Show red SnackBar for wrong credentials or user not found, etc.
+        if (e.code == 'user-not-found' || e.code == 'wrong-password') {
+          final signInMethods =
+              await FirebaseAuth.instance.fetchSignInMethodsForEmail(_email);
+
+          if (signInMethods.contains('google.com')) {
+            setState(() => _isLoading = false);
+            _showGoogleAccountDialog();
+            return;
+          }
+        }
+        // ✅ RECORD FAILED ATTEMPT
+        await SecurityService.recordFailedAttempt(_email);
+
+        // ✅ CHECK IF ACCOUNT JUST GOT LOCKED
+        final isLocked = await SecurityService.isAccountLocked(_email);
+
         String message = "Invalid email or password";
-        // You can further customize by checking e.code if needed
+
+        if (isLocked) {
+          final remainingMinutes =
+              await SecurityService.getRemainingLockoutMinutes(_email);
+          message = 'Account locked. Try again in $remainingMinutes minutes.';
+
+          await SecurityService.sendSecurityAlert(
+            email: _email,
+            subject: 'Account Locked - SmartiCare',
+            body:
+                'Your SmartiCare account has been temporarily locked due to multiple failed login attempts. The lock will expire in $remainingMinutes minutes.',
+          );
+        } else {
+          final doc = await FirebaseFirestore.instance
+              .collection('security_logs')
+              .doc(_email)
+              .get();
+
+          int failedAttempts = 0;
+          if (doc.exists) {
+            final data = doc.data() as Map<String, dynamic>;
+            failedAttempts = (data['failedAttempts'] as int?) ?? 0;
+          }
+
+          final remainingAttempts =
+              SecurityService.MAX_FAILED_ATTEMPTS - failedAttempts;
+
+          if (remainingAttempts < 3) {
+            message =
+                'Invalid credentials. $remainingAttempts attempts remaining.';
+          }
+        }
+
         _showSnackBar(message, color: Colors.red);
       } catch (_) {
+        await SecurityService.recordFailedAttempt(_email);
         _showSnackBar("Invalid email or password", color: Colors.red);
       } finally {
         setState(() => _isLoading = false);
@@ -194,26 +303,404 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // ✅ ADD THIS NEW METHOD
+  void _showGoogleAccountDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.blue),
+            SizedBox(width: 12),
+            Expanded(child: Text('Google Account Detected')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This account was created using Google Sign-In and doesn\'t have a password.',
+              style: TextStyle(fontSize: 14, height: 1.5),
+            ),
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.lightbulb_outline,
+                      color: Colors.blue.shade700, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Please use the "Sign in with Google" button below to continue.',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.blue.shade900,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              handleGoogleSignIn(context);
+            },
+            icon: Icon(Icons.login, size: 18),
+            label: Text('Sign in with Google'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// ✅ ADD PASSWORD SETUP METHOD
+  void _showSetPasswordDialog() {
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('Set Password'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: newPasswordController,
+                  obscureText: obscureNew,
+                  decoration: InputDecoration(
+                    labelText: 'New Password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                          obscureNew ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => obscureNew = !obscureNew),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: confirmPasswordController,
+                  obscureText: obscureConfirm,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm Password',
+                    suffixIcon: IconButton(
+                      icon: Icon(obscureConfirm
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () =>
+                          setState(() => obscureConfirm = !obscureConfirm),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (newPasswordController.text !=
+                      confirmPasswordController.text) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Passwords do not match')),
+                    );
+                    return;
+                  }
+
+                  if (newPasswordController.text.length < 6) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content:
+                              Text('Password must be at least 6 characters')),
+                    );
+                    return;
+                  }
+
+                  try {
+                    // Send password reset email to set password
+                    await FirebaseAuth.instance
+                        .sendPasswordResetEmail(email: _email);
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'Password set instructions sent to your email'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to set password: $e')),
+                    );
+                  }
+                },
+                child: const Text('Set Password'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+// ✅ ADD NEW METHOD TO COMPLETE LOGIN
+  Future<void> _completeLogin(UserCredential userCredential) async {
+    try {
+      await SecurityService.resetFailedAttempts(_email);
+      await SecurityService.checkSuspiciousActivity(
+        email: _email,
+        action: 'successful_login',
+      );
+
+      LatestScanCache.clearCache();
+      await _checkAndReactivateUser(userCredential.user!.uid);
+
+      await AuditLogService.logAction(
+        action: 'login',
+        details: 'User logged in with email: $_email',
+      );
+
+      await SecurityService.sendSecurityAlert(
+        email: _email,
+        subject: 'Successful Login - SmartiCare',
+        body:
+            'A successful login was detected for your SmartiCare account from ${DateTime.now()}.',
+      );
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await saveTokenToFirestore(user.uid);
+        await _afterLoginFlow(context, user.uid);
+      }
+    } catch (e) {
+      _showSnackBar('Login completion failed: $e', color: Colors.red);
+    }
+  }
+
   Future<void> _sendPasswordResetEmail() async {
     String email = _emailController.text.trim();
+
     if (email.isEmpty) {
       _showSnackBar("Please enter your email address.", color: Colors.red);
       return;
     }
+
+    // Validate email format
+    if (!RegExp(r"^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$").hasMatch(email)) {
+      _showSnackBar("Please enter a valid email address.", color: Colors.red);
+      return;
+    }
+
     setState(() => _isLoading = true);
+
     try {
+      // ✅ CHECK RATE LIMIT
+      final canRequest = await SecurityService.canRequestPasswordReset(email);
+
+      if (!canRequest) {
+        // Get cooldown information
+        final cooldown = await SecurityService.getPasswordResetCooldown(email);
+
+        String message;
+        if (cooldown != null) {
+          if (cooldown.inHours > 0) {
+            message =
+                "Too many password reset attempts. Please try again in ${cooldown.inMinutes} minutes.";
+          } else if (cooldown.inMinutes > 0) {
+            message =
+                "Please wait ${cooldown.inMinutes} minute(s) before requesting another password reset.";
+          } else {
+            message =
+                "Please wait ${cooldown.inSeconds} seconds before trying again.";
+          }
+        } else {
+          message = "Too many password reset attempts. Please try again later.";
+        }
+
+        setState(() => _isLoading = false);
+        _showSnackBar(message, color: Colors.orange);
+
+        // Show detailed dialog
+        _showRateLimitDialog(cooldown);
+        return;
+      }
+
+      // ✅ SEND PASSWORD RESET EMAIL
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
-      _showSnackBar("Password reset email sent!", color: Colors.green);
+
+      // ✅ LOG SECURITY EVENT
+      await SecurityService.logSecurityEvent(
+        action: 'password_reset_requested',
+        email: email,
+        details: 'Password reset email sent',
+        severity: 'LOW',
+      );
+
+      // ✅ SEND SECURITY ALERT
+      await SecurityService.sendSecurityAlert(
+        email: email,
+        subject: 'Password Reset Requested - SmartiCare',
+        body: '''
+Hello,
+
+A password reset was requested for your SmartiCare account.
+
+If you did not request this, please ignore this email and ensure your account is secure.
+
+If you did request this, please check your inbox for the password reset link.
+
+Time: ${DateTime.now().toString()}
+
+SmartiCare Security Team
+      ''',
+      );
+
+      setState(() => _isLoading = false);
+      _showSnackBar(
+        "Password reset email sent! Please check your inbox.",
+        color: Colors.green,
+      );
     } on FirebaseAuthException catch (e) {
+      setState(() => _isLoading = false);
+
       String message = "An error occurred.";
       if (e.code == 'user-not-found') {
         message = "No user found for that email.";
       } else if (e.code == 'invalid-email') {
         message = "Invalid email address.";
+      } else if (e.code == 'too-many-requests') {
+        message = "Too many requests. Please try again later.";
       }
+
       _showSnackBar(message, color: Colors.red);
-    } finally {
+    } catch (e) {
       setState(() => _isLoading = false);
+      _showSnackBar("Failed to send password reset email. Please try again.",
+          color: Colors.red);
+    }
+  }
+
+// ✅ ADD THIS NEW METHOD
+  void _showRateLimitDialog(Duration? cooldown) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.timer_outlined, color: Colors.orange.shade700),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('Rate Limit Reached')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'You\'ve requested too many password resets in a short time.',
+              style: TextStyle(fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline,
+                          color: Colors.orange.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Rate Limit Policy:',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '• Maximum 3 requests per hour\n'
+                    '• Minimum 5 minutes between requests\n'
+                    '• Automatic reset after 1 hour',
+                    style: TextStyle(fontSize: 12, height: 1.5),
+                  ),
+                ],
+              ),
+            ),
+            if (cooldown != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                'You can try again in: ${_formatDuration(cooldown)}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.orange.shade900,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            const Text(
+              'If you didn\'t make these requests, please contact support immediately.',
+              style: TextStyle(
+                fontSize: 12,
+                fontStyle: FontStyle.italic,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+// ✅ ADD THIS HELPER METHOD
+  String _formatDuration(Duration duration) {
+    if (duration.inHours > 0) {
+      final minutes = duration.inMinutes % 60;
+      return '${duration.inHours}h ${minutes}m';
+    } else if (duration.inMinutes > 0) {
+      final seconds = duration.inSeconds % 60;
+      return '${duration.inMinutes}m ${seconds}s';
+    } else {
+      return '${duration.inSeconds} seconds';
     }
   }
 
@@ -385,6 +872,12 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = userCredential.user;
       if (user == null) return;
       LatestScanCache.clearCache();
+
+      await SecurityService.resetFailedAttempts(userCredential.user!.email!);
+      await SecurityService.checkSuspiciousActivity(
+        email: userCredential.user!.email!,
+        action: 'successful_google_login',
+      );
 
       // ✅ CHECK AND REACTIVATE USER STATUS
       await _checkAndReactivateUser(user.uid);

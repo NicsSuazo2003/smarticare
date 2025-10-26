@@ -32,6 +32,27 @@ class _FullReportScreenState extends State<FullReportScreen> {
     _loadData();
   }
 
+  int? _calculateAge(String? birthDate) {
+    if (birthDate == null || birthDate.isEmpty) return null;
+
+    try {
+      final birth = DateTime.parse(birthDate);
+      final now = DateTime.now();
+      int age = now.year - birth.year;
+
+      // Adjust age if birthday hasn't occurred this year
+      if (now.month < birth.month ||
+          (now.month == birth.month && now.day < birth.day)) {
+        age--;
+      }
+
+      return age;
+    } catch (e) {
+      print('Error parsing birth date: $e');
+      return null;
+    }
+  }
+
   Future<void> _loadData() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -292,7 +313,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                       ),
                       pw.SizedBox(height: 2),
                       pw.Text(
-                          'Age: ${_profile?["age"] ?? "N/A"}   Gender: ${_profile?["gender"] ?? "N/A"}',
+                          'Age: ${_calculateAge(_profile?["birthDate"]) ?? "N/A"}   Gender: ${_profile?["gender"] ?? "N/A"}',
                           style: const pw.TextStyle(fontSize: 12)),
                       pw.Text(
                           'Patient ID: ${(_profile?["patientId"] != null && (_profile!["patientId"] as String).isNotEmpty) ? _profile!["patientId"] : "Not Set"}',
@@ -708,7 +729,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                                     BorderRadius.circular(12),
                                               ),
                                               child: Text(
-                                                "${_profile?["age"] ?? "N/A"} years",
+                                                "${_calculateAge(_profile?["birthDate"]) ?? "N/A"} years",
                                                 style: TextStyle(
                                                   fontSize: 12,
                                                   color: Colors.blue.shade700,
@@ -820,6 +841,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                   // Eye Scan Summary Section
 
                   // Eye Scan Summary Section
+                  // Eye Scan Summary Section
                   _buildSectionTitle('Eye Scan Summary'),
                   const SizedBox(height: 12),
                   Container(
@@ -840,7 +862,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                         : Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // In the Eye Scan Summary section, replace this part:
+                              // Header with eye result
                               Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
@@ -874,18 +896,180 @@ class _FullReportScreenState extends State<FullReportScreen> {
                               ),
                               const SizedBox(height: 16),
 
+                              // ✅ NEW: Health Score and Risk Level with Tooltips
                               Row(
                                 children: [
                                   Expanded(
-                                    child: _buildResultMetric(
-                                      label: 'Health Score',
-                                      value: _scan?['healthScore'] != null
-                                          ? '${(_scan!['healthScore'] is double ? _scan!['healthScore'].round() : _scan!['healthScore'])}%' // ✅ FIXED: Round if decimal
-                                          : 'N/A',
-                                      iconColor: cataract
-                                          ? Colors.red
-                                          : const Color(0xFF28A745),
-                                      valueColor: cataract ? Colors.red : null,
+                                    child: Column(
+                                      children: [
+                                        // Health Score with tooltip
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.check_circle,
+                                              size: 16,
+                                              color: cataract
+                                                  ? Colors.red
+                                                  : const Color(0xFF28A745),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'Health Score',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.grey.shade700,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            // ✅ Tooltip icon for Health Score
+                                            InkWell(
+                                              onTap: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (context) =>
+                                                      AlertDialog(
+                                                    title: Row(
+                                                      children: [
+                                                        Icon(Icons.info_outline,
+                                                            color: Colors
+                                                                .blue.shade700),
+                                                        SizedBox(width: 12),
+                                                        Text('Health Score'),
+                                                      ],
+                                                    ),
+                                                    content:
+                                                        SingleChildScrollView(
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          Text(
+                                                            'What is Health Score?',
+                                                            style: TextStyle(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                fontSize: 16),
+                                                          ),
+                                                          SizedBox(height: 8),
+                                                          Text(
+                                                            'Your Health Score (0-100%) represents the overall health of your eye based on:',
+                                                            style: TextStyle(
+                                                                height: 1.5),
+                                                          ),
+                                                          SizedBox(height: 12),
+                                                          _buildScoreComponent(
+                                                            icon: Icons
+                                                                .camera_alt,
+                                                            label:
+                                                                'AI Image Analysis (70%)',
+                                                            description:
+                                                                'Computer vision analysis of your eye scan',
+                                                          ),
+                                                          SizedBox(height: 12),
+                                                          _buildScoreComponent(
+                                                            icon: Icons
+                                                                .psychology,
+                                                            label:
+                                                                'Symptom Assessment (30%)',
+                                                            description:
+                                                                'Your self-reported symptoms',
+                                                          ),
+                                                          SizedBox(height: 16),
+                                                          Container(
+                                                            padding:
+                                                                EdgeInsets.all(
+                                                                    12),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: Colors
+                                                                  .blue.shade50,
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          8),
+                                                            ),
+                                                            child: Row(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                Icon(
+                                                                    Icons
+                                                                        .lightbulb_outline,
+                                                                    color: Colors
+                                                                        .blue
+                                                                        .shade700,
+                                                                    size: 20),
+                                                                SizedBox(
+                                                                    width: 8),
+                                                                Expanded(
+                                                                  child: Text(
+                                                                    'Higher scores (80-100%) indicate healthier eyes with no cataract signs.',
+                                                                    style:
+                                                                        TextStyle(
+                                                                      fontSize:
+                                                                          13,
+                                                                      color: Colors
+                                                                          .blue
+                                                                          .shade900,
+                                                                      height:
+                                                                          1.4,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    actions: [
+                                                      TextButton(
+                                                        onPressed: () =>
+                                                            Navigator.pop(
+                                                                context),
+                                                        child: Text('Got It'),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              },
+                                              child: Container(
+                                                padding: EdgeInsets.all(2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.blue
+                                                      .withOpacity(0.1),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(
+                                                  Icons.help_outline,
+                                                  color: Colors.blue.shade700,
+                                                  size: 16,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          _scan?['healthScore'] != null
+                                              ? '${(_scan!['healthScore'] is double ? _scan!['healthScore'].round() : _scan!['healthScore'])}%'
+                                              : 'N/A',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: cataract
+                                                ? Colors.red
+                                                : const Color(0xFF28A745),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   Container(
@@ -894,20 +1078,198 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                     color: Colors.grey.shade300,
                                   ),
                                   Expanded(
-                                    child: _buildResultMetric(
-                                      label: 'Risk Level',
-                                      value: _scan?['riskLevel'] ?? 'N/A',
-                                      iconColor: cataract
-                                          ? Colors.red
-                                          : const Color(0xFF28A745),
-                                      valueColor: cataract ? Colors.red : null,
+                                    child: Column(
+                                      children: [
+                                        // Risk Level with tooltip
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.check_circle,
+                                              size: 16,
+                                              color: cataract
+                                                  ? Colors.red
+                                                  : const Color(0xFF28A745),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              'Risk Level',
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: Colors.grey.shade700,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            // ✅ Tooltip icon for Risk Level
+                                            InkWell(
+                                              onTap: () {
+                                                showDialog(
+                                                  context: context,
+                                                  builder: (context) =>
+                                                      AlertDialog(
+                                                    title: Row(
+                                                      children: [
+                                                        Icon(
+                                                            Icons.warning_amber,
+                                                            color: Colors.orange
+                                                                .shade700),
+                                                        SizedBox(width: 12),
+                                                        Text('Risk Level'),
+                                                      ],
+                                                    ),
+                                                    content:
+                                                        SingleChildScrollView(
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          Text(
+                                                            'What is Risk Level?',
+                                                            style: TextStyle(
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                                fontSize: 16),
+                                                          ),
+                                                          SizedBox(height: 8),
+                                                          Text(
+                                                            'Risk Level indicates the urgency of medical attention needed based on your Health Score:',
+                                                            style: TextStyle(
+                                                                height: 1.5),
+                                                          ),
+                                                          SizedBox(height: 16),
+                                                          _buildRiskLevelExample(
+                                                            color: Colors.green,
+                                                            level: 'Low Risk',
+                                                            range:
+                                                                '80-100% Health Score',
+                                                            description:
+                                                                'No immediate action needed. Continue regular checkups.',
+                                                            icon: Icons
+                                                                .check_circle,
+                                                          ),
+                                                          SizedBox(height: 12),
+                                                          _buildRiskLevelExample(
+                                                            color:
+                                                                Colors.orange,
+                                                            level:
+                                                                'Moderate Risk',
+                                                            range:
+                                                                '60-79% Health Score',
+                                                            description:
+                                                                'Schedule a follow-up appointment within 1-2 months.',
+                                                            icon: Icons
+                                                                .warning_amber,
+                                                          ),
+                                                          SizedBox(height: 12),
+                                                          _buildRiskLevelExample(
+                                                            color: Colors.red,
+                                                            level: 'High Risk',
+                                                            range:
+                                                                'Below 60% Health Score',
+                                                            description:
+                                                                'Consult an ophthalmologist as soon as possible.',
+                                                            icon: Icons.error,
+                                                          ),
+                                                          SizedBox(height: 16),
+                                                          Container(
+                                                            padding:
+                                                                EdgeInsets.all(
+                                                                    12),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: Colors
+                                                                  .red.shade50,
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          8),
+                                                            ),
+                                                            child: Row(
+                                                              crossAxisAlignment:
+                                                                  CrossAxisAlignment
+                                                                      .start,
+                                                              children: [
+                                                                Icon(
+                                                                    Icons
+                                                                        .medical_services,
+                                                                    color: Colors
+                                                                        .red
+                                                                        .shade700,
+                                                                    size: 20),
+                                                                SizedBox(
+                                                                    width: 8),
+                                                                Expanded(
+                                                                  child: Text(
+                                                                    'This is a screening tool, not a diagnosis. Always consult a medical professional.',
+                                                                    style:
+                                                                        TextStyle(
+                                                                      fontSize:
+                                                                          13,
+                                                                      color: Colors
+                                                                          .red
+                                                                          .shade900,
+                                                                      height:
+                                                                          1.4,
+                                                                    ),
+                                                                  ),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    actions: [
+                                                      TextButton(
+                                                        onPressed: () =>
+                                                            Navigator.pop(
+                                                                context),
+                                                        child: Text('Got It'),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              },
+                                              child: Container(
+                                                padding: EdgeInsets.all(2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.orange
+                                                      .withOpacity(0.1),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(
+                                                  Icons.help_outline,
+                                                  color: Colors.orange.shade700,
+                                                  size: 16,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          _scan?['riskLevel'] ?? 'N/A',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: cataract
+                                                ? Colors.red
+                                                : const Color(0xFF28A745),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 16),
 
-                              // 👇 Eye image block (safe for both fields)
+                              // Eye image (if available)
                               Builder(
                                 builder: (context) {
                                   final imageUrl = _scan?['originalImage'] ??
@@ -1178,6 +1540,106 @@ class _FullReportScreenState extends State<FullReportScreen> {
                 ),
               ),
             ),
+    );
+  }
+
+  // Helper method for score components
+  Widget _buildScoreComponent({
+    required IconData icon,
+    required String label,
+    required String description,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: Colors.blue.shade700, size: 20),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+// Helper method for risk level examples
+  Widget _buildRiskLevelExample({
+    required Color color,
+    required String level,
+    required String range,
+    required String description,
+    required IconData icon,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                level,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: color,
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                range,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              SizedBox(height: 2),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

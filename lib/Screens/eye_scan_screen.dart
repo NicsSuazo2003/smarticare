@@ -11,6 +11,7 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../services/offline_sync_service.dart';
 import 'scan_result_screen.dart';
 import 'home_screen.dart';
 import 'progress_screen.dart';
@@ -215,12 +216,12 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
       final XFile image = await _cameraController!.takePicture();
       File imageFile = File(image.path);
 
-      // Get preview size (pass to crop)
+      // Get preview size
       final RenderBox box = context.findRenderObject() as RenderBox;
       double previewW = box.size.width;
       double previewH = box.size.height;
 
-      // Crop to the square overlay before prediction
+      // Crop to the square overlay
       File croppedImage =
           await _cropImageToSquare(imageFile, 220, previewW, previewH);
 
@@ -228,85 +229,97 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
 
       final isGuest =
           Provider.of<UserSessionProvider>(context, listen: false).isGuest;
-      String scanId = "";
-      String imageUrl = "";
+
+      String scanId =
+          'scan_${DateTime.now().millisecondsSinceEpoch}_${FirebaseAuth.instance.currentUser?.uid ?? 'guest'}';
+      String imageUrl = croppedImage.path; // Default fallback
 
       if (!isGuest) {
-        // ✅ Check connectivity with timeout
-        bool isOnline = false;
         try {
-          final connectivityResult = await Connectivity()
-              .checkConnectivity()
-              .timeout(const Duration(milliseconds: 500));
-          isOnline = connectivityResult != ConnectivityResult.none;
-        } catch (_) {
-          isOnline = false;
-        }
+          LatestScanCache.updateLeftEye(
+              result['predictedClass'], result['confidence']);
 
-        if (isOnline) {
-          // Try to save with timeout
-          try {
-            LatestScanCache.updateLeftEye(
-                result['predictedClass'], result['confidence']);
+          // Check connectivity
+          final connectivityResult = await Connectivity().checkConnectivity();
 
-            scanId = await _eyeScanService
-                .saveScanResult(
-                  imageFile: croppedImage,
-                  prediction: result['predictedClass'],
-                  confidence: result['confidence'],
-                  eye: _selectedEye,
-                  symptomScore: widget.symptomScore,
-                )
-                .timeout(const Duration(seconds: 3));
+          if (connectivityResult != ConnectivityResult.none) {
+            try {
+              // ✅ FIXED: saveScanResult now handles upload and returns verified scanId
+              await _eyeScanService
+                  .saveScanResult(
+                    imageFile: croppedImage,
+                    prediction: result['predictedClass'],
+                    confidence: result['confidence'],
+                    eye: _selectedEye,
+                    symptomScore: widget.symptomScore,
+                    scanId: scanId,
+                  )
+                  .timeout(const Duration(seconds: 60));
 
-            // Save notifications with timeout
-            final userId = FirebaseAuth.instance.currentUser?.uid ?? "";
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(userId)
-                .collection('notifications')
-                .add({
-              "type": "scan",
-              "title": "Eye Scan Result Ready",
-              "message": "Your eye scan result is ready to view.",
-              "timestamp": FieldValue.serverTimestamp(),
-              "isRead": false,
-            }).timeout(const Duration(seconds: 2));
+              // ✅ Verify the saved document
+              final doc = await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(FirebaseAuth.instance.currentUser!.uid)
+                  .collection('scans')
+                  .doc(scanId)
+                  .get()
+                  .timeout(const Duration(seconds: 5));
 
-            // Additional notifications (omitted for brevity)
-            // ... (add similar timeout logic for other Firestore writes)
+              if (doc.exists && doc.data() != null) {
+                final savedImageUrl = doc.data()!['imageUrl'];
 
-            await AuditLogService.logAction(
-              action: 'eye_scan_performed',
-              details:
-                  'ScanId: $scanId, Eye: $_selectedEye, Prediction: ${result['predictedClass']}, Confidence: ${result['confidence']}',
-            ).timeout(const Duration(seconds: 2));
-
-            // Get imageUrl
-            final doc = await FirebaseFirestore.instance
-                .collection('users')
-                .doc(FirebaseAuth.instance.currentUser!.uid)
-                .collection('scans')
-                .doc(scanId)
-                .get()
-                .timeout(const Duration(seconds: 2));
-            imageUrl = doc['imageUrl'];
-          } catch (e) {
-            print('⚠️ Failed to save scan online (proceeding anyway): $e');
-            // Use local file path as fallback
+                // ✅ Verify it's a Storage URL
+                if (savedImageUrl != null &&
+                    savedImageUrl.startsWith(
+                        'https://firebasestorage.googleapis.com/')) {
+                  imageUrl = savedImageUrl;
+                  print('✅ Confirmed Storage URL: $imageUrl');
+                } else {
+                  print(
+                      '❌ ERROR: Saved URL is not a Storage URL: $savedImageUrl');
+                  throw Exception('Image not properly uploaded to Storage');
+                }
+              } else {
+                throw Exception('Scan document not found in Firestore');
+              }
+            } catch (e) {
+              print('⚠️ Online save failed: $e');
+              throw e; // Don't fallback to local path - inform user
+            }
+          } else {
+            print('📴 Offline - saving to offline queue');
+            await OfflineSyncService().saveScanOffline({
+              'scanId': scanId,
+              'imageUrl': croppedImage.path,
+              'prediction': result['predictedClass'],
+              'confidence': result['confidence'],
+              'eye': _selectedEye,
+              'symptomScore': widget.symptomScore,
+              'scanDate': DateTime.now().toUtc().toString().split('.').first,
+              'userId': FirebaseAuth.instance.currentUser!.uid,
+            });
             imageUrl = croppedImage.path;
           }
-        } else {
-          // ✅ Offline: Use local file path
-          print('📴 Offline - using local image path');
-          imageUrl = croppedImage.path;
+        } catch (e) {
+          print('❌ Failed to save scan: $e');
+
+          // Show error to user instead of silently failing
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error saving scan: $e'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
+          rethrow;
         }
       } else {
-        // For guest, just display the local file path as URL
-        imageUrl = croppedImage.path;
+        scanId = 'guest_scan_${DateTime.now().millisecondsSinceEpoch}';
       }
 
-      // ✅ ALWAYS navigate, regardless of save success
+      // ✅ Navigate with verified URL
       if (mounted) {
         Navigator.push(
           context,
@@ -324,10 +337,15 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
         );
       }
     } catch (e) {
-      print('Error capturing and saving image: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      print('❌ Error capturing image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     } finally {
       setState(() {
         _isCameraActive = false;
@@ -446,15 +464,12 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
       if (image != null) {
         File originalImage = File(image.path);
 
-        // Add quality check for uploads only
         if (!await _validateUploadImage(originalImage)) {
           return;
         }
 
-        // Use the improved cropping that matches camera processing
         File croppedImage = await _cropImageToCenterSquare(originalImage);
 
-        // Rest of your existing code remains the same...
         setState(() {
           _selectedImage = croppedImage;
         });
@@ -487,11 +502,11 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
 
           final isGuest =
               Provider.of<UserSessionProvider>(context, listen: false).isGuest;
-          String scanId = "";
+          String scanId =
+              'scan_${DateTime.now().millisecondsSinceEpoch}_${FirebaseAuth.instance.currentUser?.uid ?? 'guest'}';
           String imageUrl = "";
 
           if (!isGuest) {
-            // ✅ Check connectivity with timeout
             bool isOnline = false;
             try {
               final connectivityResult = await Connectivity()
@@ -504,33 +519,66 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
 
             if (isOnline) {
               try {
-                scanId = await _eyeScanService
+                // ✅ FIX 1: Changed timeout from 3 seconds to 120 seconds (2 minutes)
+                await _eyeScanService
                     .saveScanResult(
-                      imageFile: croppedImage, // Use cropped image here too
+                      imageFile: croppedImage,
                       prediction: result['predictedClass'],
                       confidence: result['confidence'],
                       eye: _selectedEye,
                       symptomScore: widget.symptomScore,
+                      scanId: scanId,
                     )
-                    .timeout(const Duration(seconds: 3));
+                    .timeout(const Duration(
+                        seconds: 120)); // ✅ FIXED: 120s instead of 3s
 
                 await AuditLogService.logAction(
                   action: 'eye_scan_performed',
                   details:
                       'ScanId: $scanId, Eye: $_selectedEye, Prediction: ${result['predictedClass']}, Confidence: ${result['confidence']}',
-                ).timeout(const Duration(seconds: 2));
+                ).timeout(const Duration(seconds: 10));
 
+                // ✅ FIX 2: Changed timeout from 2 seconds to 15 seconds
                 final doc = await FirebaseFirestore.instance
                     .collection('users')
                     .doc(FirebaseAuth.instance.currentUser!.uid)
                     .collection('scans')
                     .doc(scanId)
                     .get()
-                    .timeout(const Duration(seconds: 2));
-                imageUrl = doc['imageUrl'];
+                    .timeout(const Duration(
+                        seconds: 15)); // ✅ FIXED: 15s instead of 2s
+
+                if (doc.exists && doc.data() != null) {
+                  final savedImageUrl = doc.data()!['imageUrl'];
+
+                  // ✅ Verify it's a Storage URL
+                  if (savedImageUrl != null &&
+                      savedImageUrl.startsWith(
+                          'https://firebasestorage.googleapis.com/')) {
+                    imageUrl = savedImageUrl;
+                    print('✅ Storage URL confirmed: $imageUrl');
+                  } else {
+                    print(
+                        '⚠️ WARNING: URL is not a Storage URL: $savedImageUrl');
+                    throw Exception('Image not properly uploaded to Storage');
+                  }
+                } else {
+                  throw Exception('Scan document not found in Firestore');
+                }
               } catch (e) {
-                print('⚠️ Failed to save scan online (proceeding anyway): $e');
-                imageUrl = croppedImage.path;
+                print('⚠️ Failed to save scan online: $e');
+
+                // Show error instead of silent fallback
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Upload failed: $e'),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 5),
+                    ),
+                  );
+                }
+                rethrow;
               }
             } else {
               print('📴 Offline - using local image path');
@@ -540,7 +588,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
             imageUrl = croppedImage.path;
           }
 
-          // ✅ ALWAYS navigate
+          // ✅ Navigate only if imageUrl is valid
           if (mounted) {
             Navigator.push(
               context,
@@ -564,6 +612,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
               SnackBar(
                 content: Text('Error: ${e.toString()}'),
                 duration: const Duration(seconds: 3),
+                backgroundColor: Colors.red,
               ),
             );
           }
@@ -1223,7 +1272,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                 _buildInstructionItem(Icons.center_focus_strong,
                     'Position your eye in the center of the square overlay'),
                 _buildInstructionItem(Icons.phone_android,
-                    'Hold the device 10-12 inches (25-30 cm) from your face'),
+                    'Hold the device 1-3 inches from your eye target'),
                 _buildInstructionItem(Icons.visibility,
                     'Try to keep your eye open and avoid blinking during capture'),
               ],

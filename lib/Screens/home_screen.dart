@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -52,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     print("HomeScreen initState called");
-    LatestScanCache.clearCache();
+
     _updateDateTime();
     _fetchEyeHealthData();
     _fetchRecentActivities();
@@ -145,12 +146,51 @@ class _HomeScreenState extends State<HomeScreen> {
   String getEyeHealthStatusTitle() {
     final leftScore = _eyeHealthData['leftEye']['score'] as int;
     final rightScore = _eyeHealthData['rightEye']['score'] as int;
+
     if (leftScore == 0 && rightScore == 0) {
       return "No Data Yet";
     }
-    return _eyeHealthData['overallScore'] >= 70
-        ? "Good Eye Health"
-        : "Attention Needed";
+
+    final overallScore = _eyeHealthData['overallScore'] as int;
+
+    // ✅ Match tooltip logic (80-100, 60-79, <60)
+    if (overallScore >= 80) {
+      return "Healthy Eyes";
+    } else if (overallScore >= 60) {
+      return "Monitor Health";
+    } else {
+      return "Attention Needed";
+    }
+  }
+
+  Color _getOverallHealthColor() {
+    final overallScore = _eyeHealthData['overallScore'] as int;
+
+    // Always return white since text is on blue background
+    // But you can adjust opacity for different states
+    if (overallScore >= 80) {
+      return Colors.white;
+    } else if (overallScore >= 60) {
+      return Colors.white;
+    } else if (overallScore > 0) {
+      return Colors.white;
+    } else {
+      return Colors.white70; // Dimmed for "No Data Yet"
+    }
+  }
+
+  String _getHealthDescription() {
+    final overallScore = _eyeHealthData['overallScore'] as int;
+
+    if (overallScore >= 80) {
+      return "Both eyes are in excellent condition with no signs of cataract.";
+    } else if (overallScore >= 60) {
+      return "Early signs detected. Regular monitoring recommended.";
+    } else if (overallScore > 0) {
+      return "Cataract detected. Please consult a specialist soon.";
+    } else {
+      return "Your overall eye health score is based on the combined analysis of both eyes.";
+    }
   }
 
   List<Map<String, dynamic>> _recentActivities = [];
@@ -285,12 +325,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchEyeHealthData() async {
     try {
+      print('🔵 _fetchEyeHealthData START');
       setState(() {
         _isLoadingMetrics = true;
       });
 
       final userId = FirebaseAuth.instance.currentUser?.uid;
+      print('🔵 userId: $userId');
+
       if (userId == null) {
+        print('🔴 No userId - aborting');
         setState(() {
           _isLoadingMetrics = false;
         });
@@ -309,127 +353,161 @@ class _HomeScreenState extends State<HomeScreen> {
         'stage': 'No Data'
       };
 
-      bool fetchSuccessful = false;
+      bool leftFetched = false;
+      bool rightFetched = false;
 
-      // Try to fetch from Firebase first
+      // ✅ Check connectivity
+      bool isOnline = true;
       try {
-        // Fetch left eye data from Firebase
-        final leftEyeQuery = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('scans')
-            .where('eye', isEqualTo: 'Left Eye')
-            .orderBy('timestamp', descending: true)
-            .limit(1)
-            .get();
+        final connectivity = Connectivity();
+        final result = await connectivity.checkConnectivity();
+        isOnline = result != ConnectivityResult.none;
+        print('🌐 Online: $isOnline');
+      } catch (e) {
+        print('⚠️ Connectivity check failed: $e');
+        isOnline = false;
+      }
 
-        if (leftEyeQuery.docs.isNotEmpty) {
-          final doc = leftEyeQuery.docs.first;
-          final data = doc.data();
+      if (isOnline) {
+        print('🟢 Fetching from Firestore...');
+        try {
+          // ✅ Fetch LEFT EYE
+          final leftEyeQuery = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('scans')
+              .where('eye', isEqualTo: 'Left Eye')
+              .orderBy('timestamp', descending: true)
+              .limit(1)
+              .get()
+              .timeout(const Duration(seconds: 5));
 
-          final prediction = data['prediction'] as String? ?? '';
-          // ✅ healthScore is already 0-100 from scoring service
-          final double healthScore = data['healthScore'] as double? ?? 0.0;
+          print('🔵 Left eye query returned ${leftEyeQuery.docs.length} docs');
 
-// ✅ If healthScore is missing, fall back to confidence (which IS 0-1)
-          final double fallbackScore = data['confidence'] as double? ?? 0.0;
-          final double finalScore =
-              healthScore > 0 ? healthScore : (fallbackScore * 100);
+          if (leftEyeQuery.docs.isNotEmpty) {
+            final doc = leftEyeQuery.docs.first;
+            final data = doc.data();
+            print('🔵 Left eye raw data: $data');
 
-          print("LEFT EYE - Prediction: $prediction, HealthScore: $finalScore");
+            final prediction = data['prediction'] as String? ?? '';
+            final double healthScore =
+                (data['healthScore'] as num?)?.toDouble() ?? 0.0;
+            final double confidence =
+                (data['confidence'] as num?)?.toDouble() ?? 0.0;
 
-          final bool isNormal = prediction.toLowerCase().contains('normal') ||
-              prediction.toLowerCase() == "no cataract";
+            // ✅ Use healthScore if available, otherwise fallback to confidence * 100
+            final double finalScore =
+                healthScore > 0 ? healthScore : (confidence * 100);
 
-          leftEyeData = {
-            'status': isNormal ? 'Normal' : 'Immature',
-            'score':
-                finalScore.round().clamp(0, 100), // ✅ Already 0-100, just clamp
-            'stage': isNormal ? 'No Cataract' : 'Initial Stage'
-          };
-          // Update cache with fresh data
-          LatestScanCache.updateLeftEye(prediction, healthScore);
-          fetchSuccessful = true;
-        }
+            print(
+                '🟢 LEFT - Prediction: $prediction, HealthScore: $finalScore');
 
-        // Fetch right eye data from Firebase
-        final rightEyeQuery = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('scans')
-            .where('eye', isEqualTo: 'Right Eye')
-            .orderBy('timestamp', descending: true)
-            .limit(1)
-            .get();
+            final bool isNormal = prediction.toLowerCase().contains('normal') ||
+                prediction.toLowerCase() == "no cataract";
 
-        if (rightEyeQuery.docs.isNotEmpty) {
-          final doc = rightEyeQuery.docs.first;
-          final data = doc.data();
+            leftEyeData = {
+              'status': isNormal ? 'Normal' : 'Immature',
+              'score': finalScore.round().clamp(0, 100),
+              'stage': isNormal ? 'No Cataract' : 'Initial Stage'
+            };
 
-          final prediction = data['prediction'] as String? ?? '';
-          // ✅ healthScore is already 0-100 from scoring service
-          final double healthScore = data['healthScore'] as double? ?? 0.0;
+            // ✅ Update cache with health score (not confidence!)
+            LatestScanCache.updateLeftEye(prediction, finalScore);
+            leftFetched = true;
+          } else {
+            print('⚠️ No left eye scans found in Firestore');
+          }
 
-// ✅ If healthScore is missing, fall back to confidence (which IS 0-1)
-          final double fallbackScore = data['confidence'] as double? ?? 0.0;
-          final double finalScore =
-              healthScore > 0 ? healthScore : (fallbackScore * 100);
+          // ✅ Fetch RIGHT EYE
+          final rightEyeQuery = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('scans')
+              .where('eye', isEqualTo: 'Right Eye')
+              .orderBy('timestamp', descending: true)
+              .limit(1)
+              .get()
+              .timeout(const Duration(seconds: 5));
 
           print(
-              "RIGHT EYE - Prediction: $prediction, HealthScore: $finalScore");
+              '🔵 Right eye query returned ${rightEyeQuery.docs.length} docs');
 
-          final bool isNormal = prediction.toLowerCase().contains('normal') ||
-              prediction.toLowerCase() == "no cataract";
+          if (rightEyeQuery.docs.isNotEmpty) {
+            final doc = rightEyeQuery.docs.first;
+            final data = doc.data();
+            print('🔵 Right eye raw data: $data');
 
-          rightEyeData = {
-            'status': isNormal ? 'Normal' : 'Immature',
-            'score':
-                finalScore.round().clamp(0, 100), // ✅ Already 0-100, just clamp
-            'stage': isNormal ? 'No Cataract' : 'Initial Stage'
-          };
+            final prediction = data['prediction'] as String? ?? '';
+            final double healthScore =
+                (data['healthScore'] as num?)?.toDouble() ?? 0.0;
+            final double confidence =
+                (data['confidence'] as num?)?.toDouble() ?? 0.0;
 
-          LatestScanCache.updateRightEye(prediction, healthScore);
-          fetchSuccessful = true;
+            final double finalScore =
+                healthScore > 0 ? healthScore : (confidence * 100);
+
+            print(
+                '🟢 RIGHT - Prediction: $prediction, HealthScore: $finalScore');
+
+            final bool isNormal = prediction.toLowerCase().contains('normal') ||
+                prediction.toLowerCase() == "no cataract";
+
+            rightEyeData = {
+              'status': isNormal ? 'Normal' : 'Immature',
+              'score': finalScore.round().clamp(0, 100),
+              'stage': isNormal ? 'No Cataract' : 'Initial Stage'
+            };
+
+            LatestScanCache.updateRightEye(prediction, finalScore);
+            rightFetched = true;
+          } else {
+            print('⚠️ No right eye scans found in Firestore');
+          }
+        } catch (e) {
+          print('🔴 Firestore fetch error: $e');
+          isOnline = false; // Treat as offline
         }
-      } catch (e) {
-        print('Error fetching from Firebase (might be offline): $e');
-        // Fall back to cache if Firebase fails
-        fetchSuccessful = false;
       }
 
-      // If Firebase fetch failed (offline), use cache data
-      if (!fetchSuccessful) {
-        print('Using cached data (offline mode)');
-        if (LatestScanCache.hasEyeData(true)) {
+      // ✅ FALLBACK: Use cache if Firestore failed or offline
+      if (!isOnline || (!leftFetched && !rightFetched)) {
+        print('📴 Using cached data...');
+
+        if (!leftFetched && LatestScanCache.hasEyeData(true)) {
           final prediction = LatestScanCache.leftEyePrediction;
-          final confidence = LatestScanCache.leftEyeConfidence;
+          final healthScore = LatestScanCache.leftEyeHealthScore; // ✅ Now 0-100
+
+          print('📦 Left eye from cache: $prediction, $healthScore%');
 
           final bool isNormal = prediction.toLowerCase().contains('normal') ||
               prediction.toLowerCase() == "no cataract";
 
           leftEyeData = {
             'status': isNormal ? 'Normal' : 'Immature',
-            'score': (confidence * 100).round(),
+            'score': healthScore.round().clamp(0, 100), // ✅ No multiplication!
             'stage': isNormal ? 'No Cataract' : 'Initial Stage'
           };
         }
 
-        if (LatestScanCache.hasEyeData(false)) {
+        if (!rightFetched && LatestScanCache.hasEyeData(false)) {
           final prediction = LatestScanCache.rightEyePrediction;
-          final confidence = LatestScanCache.rightEyeConfidence;
+          final healthScore =
+              LatestScanCache.rightEyeHealthScore; // ✅ Now 0-100
+
+          print('📦 Right eye from cache: $prediction, $healthScore%');
 
           final bool isNormal = prediction.toLowerCase().contains('normal') ||
               prediction.toLowerCase() == "no cataract";
 
           rightEyeData = {
             'status': isNormal ? 'Normal' : 'Immature',
-            'score': (confidence * 100).round(),
+            'score': healthScore.round().clamp(0, 100), // ✅ No multiplication!
             'stage': isNormal ? 'No Cataract' : 'Initial Stage'
           };
         }
       }
 
-      // Calculate overall score
+      // ✅ Calculate overall score
       int overallScore = 0;
       if ((leftEyeData['score'] as num) > 0 ||
           (rightEyeData['score'] as num) > 0) {
@@ -449,6 +527,9 @@ class _HomeScreenState extends State<HomeScreen> {
         overallScore = divisor > 0 ? (sum / divisor).round() : 0;
       }
 
+      print(
+          '✅ Final data - Left: ${leftEyeData['score']}%, Right: ${rightEyeData['score']}%, Overall: $overallScore%');
+
       setState(() {
         _eyeHealthData = {
           'leftEye': leftEyeData,
@@ -458,7 +539,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingMetrics = false;
       });
     } catch (e) {
-      print('Error in _fetchEyeHealthData: $e');
+      print('❌ Error in _fetchEyeHealthData: $e');
       setState(() {
         _isLoadingMetrics = false;
       });
@@ -690,10 +771,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         Container(
                           width: 40,
                           height: 40,
-                          decoration: BoxDecoration(
-                            color: primaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
                             child: Image.asset(
@@ -796,6 +873,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // Eye Health Score Card
               // Eye Health Score Card
+              // Eye Health Score Card
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Container(
@@ -850,15 +928,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                                 children: [
                                                   Text(
                                                     getEyeHealthStatusTitle(),
-                                                    style: const TextStyle(
+                                                    style: TextStyle(
+                                                      // ✅ No 'const' here
                                                       fontSize: 22,
                                                       fontWeight:
                                                           FontWeight.bold,
-                                                      color: Colors.white,
+                                                      color:
+                                                          _getOverallHealthColor(),
                                                     ),
                                                   ),
                                                   const SizedBox(width: 8),
-                                                  // ✅ NEW: Tooltip icon
+                                                  // Tooltip icon
                                                   InkWell(
                                                     onTap: () {
                                                       showDialog(
@@ -1028,7 +1108,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                               SizedBox(
                                                 width: size.width * 0.6,
                                                 child: Text(
-                                                  "Your overall eye health score is based on the combined analysis of both eyes.",
+                                                  _getHealthDescription(), // ✅ Dynamic description
                                                   style: TextStyle(
                                                     fontSize: 14,
                                                     color: Colors.white

@@ -44,7 +44,6 @@ class ScanResultScreen extends StatefulWidget {
 
 class _ScanResultScreenState extends State<ScanResultScreen> {
   int _selectedNavIndex = 2;
-  final String username = "tmae20";
 
   String getSymptomConclusion(double score) {
     if (score < 0.2) return "Low risk of symptoms";
@@ -62,6 +61,56 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId == null) return;
 
+      // ✅ ADD RETRY LOGIC - Scan might still be uploading
+      bool scanExists = false;
+      int retryCount = 0;
+      const maxRetries = 5;
+
+      while (!scanExists && retryCount < maxRetries) {
+        try {
+          final doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('scans')
+              .doc(widget.scanId)
+              .get();
+
+          if (doc.exists) {
+            scanExists = true;
+            final scanData = doc.data();
+
+            // ✅ Verify the image URL is a Storage URL
+            final imageUrl = scanData?['imageUrl'];
+            if (imageUrl != null &&
+                imageUrl
+                    .startsWith('https://firebasestorage.googleapis.com/')) {
+              print(
+                  '✅ Scan verified: Storage URL present - ${imageUrl.substring(0, 50)}...');
+            } else {
+              print('❌ Scan verification failed: Invalid imageUrl - $imageUrl');
+            }
+            break;
+          } else {
+            retryCount++;
+            print(
+                '⏳ Scan not found yet, retrying... ($retryCount/$maxRetries)');
+            await Future.delayed(
+                Duration(seconds: retryCount * 1)); // Exponential backoff
+          }
+        } catch (e) {
+          retryCount++;
+          print('⚠️ Error checking scan existence: $e');
+          if (retryCount >= maxRetries) break;
+          await Future.delayed(Duration(seconds: retryCount * 1));
+        }
+      }
+
+      if (!scanExists) {
+        print('⚠️ Scan document not found after $maxRetries attempts');
+        return;
+      }
+
+      // ✅ Rest of your notification code remains the same...
       final scoringService = ScoringService();
       final double computedHealthScore = scoringService.calculateHealthScore(
         imageScore: widget.confidence,
@@ -70,110 +119,52 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       );
 
       String riskLevel = "";
-      if (computedHealthScore >= 0.8) {
+      if (computedHealthScore >= 80) {
         riskLevel = "Low";
-      } else if (computedHealthScore >= 0.5) {
+      } else if (computedHealthScore >= 60) {
         riskLevel = "Moderate";
       } else {
         riskLevel = "High";
       }
 
-      final scanData = {
-        'scanId': widget.scanId,
-        'confidence': widget.confidence,
-        'eye': widget.eye,
-        'imageUrl': widget.imageUrl,
-        'prediction': widget.prediction,
-        'healthScore': computedHealthScore.round(),
-        'symptomScore': widget.symptomScore,
-        'scanDate': widget.scanDate,
-        'riskLevel': riskLevel,
-        'timestamp': FieldValue.serverTimestamp(),
-        'userId': userId,
-      };
+      // Create user notification
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .add({
+        "type": "scan",
+        "title": "New Eye Scan Result",
+        "message":
+            "Your ${widget.eye.toLowerCase()} scan on ${widget.scanDate} completed. Result: ${widget.prediction}.",
+        "timestamp": FieldValue.serverTimestamp(),
+        "isRead": false,
+      });
 
-      // Check connectivity provider (existing app pattern)
-      final connectivity =
-          Provider.of<ConnectivityProvider>(context, listen: false);
+      // Check if alert notification needed
+      final String predLower = widget.prediction.toLowerCase();
+      final bool isCataract =
+          !predLower.contains('normal') && !predLower.contains('no cataract');
 
-      if (connectivity.isOnline) {
-        // Save scan document
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('scans')
-            .doc(widget.scanId)
-            .set(scanData, SetOptions(merge: true));
+      if (isCataract || riskLevel == 'High' || riskLevel == 'Moderate') {
+        final String adminMessage =
+            'Scan (${widget.scanId}) for user $userId on ${widget.scanDate} indicates ${widget.prediction} (risk: $riskLevel).';
+        final String priority = (riskLevel == 'High') ? 'High' : 'Medium';
 
-        // Create per-user notification (existing UX pattern)
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('notifications')
-            .add({
-          "type": "scan",
-          "title": "New Eye Scan Result",
-          "message":
-              "Your ${widget.eye.toLowerCase()} scan on ${widget.scanDate} completed. Result: ${widget.prediction}.",
-          "timestamp": FieldValue.serverTimestamp(),
-          "isRead": false,
+        await FirebaseFirestore.instance.collection('admin_notifications').add({
+          'type': 'scan_alert',
+          'title': 'Potential Cataract Detected',
+          'message': adminMessage,
+          'priority': priority,
+          'createdAt': FieldValue.serverTimestamp(),
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+          'relatedUserId': userId,
+          'scanId': widget.scanId,
         });
-
-        // If the scan indicates potential cataract / non-normal result, notify admins
-        final String predLower = widget.prediction.toLowerCase();
-        final bool isCataract =
-            !predLower.contains('normal') && !predLower.contains('no cataract');
-
-        if (isCataract || riskLevel == 'High' || riskLevel == 'Medium') {
-          // Build a helpful admin message and priority
-          final String adminMessage =
-              'Scan (${widget.scanId}) for user $userId on ${widget.scanDate} indicates ${widget.prediction} (risk: $riskLevel).';
-          final String priority = (riskLevel == 'High') ? 'High' : 'Medium';
-
-          await FirebaseFirestore.instance
-              .collection('admin_notifications')
-              .add({
-            'type': 'scan_alert',
-            'title': 'Potential Cataract Detected',
-            'message': adminMessage,
-            'priority': priority,
-            'createdAt': FieldValue.serverTimestamp(),
-            'timestamp':
-                FieldValue.serverTimestamp(), // duplicate for compatibility
-            'isRead': false, // use isRead to match notification_screen filters
-            'relatedUserId': userId,
-            'scanId': widget.scanId,
-          });
-        }
-
-        print('✅ Scan saved to Firestore and notifications created if needed');
-      } else {
-        // Offline: save scan for later sync (existing offline behavior)
-        await OfflineSyncService().saveScanOffline(scanData);
-
-        // Also optionally create a local user notification entry (will sync later)
-        // This uses the same pattern as the online path but may require the sync service
-        // to propagate notifications upstream when online.
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('notifications')
-            .add({
-          "type": "scan",
-          "title": "Scan saved offline",
-          "message":
-              "Your ${widget.eye.toLowerCase()} scan on ${widget.scanDate} was saved offline and will be processed when online.",
-          "timestamp": FieldValue.serverTimestamp(),
-          "isRead": false,
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Scan saved offline - will sync when online'),
-            backgroundColor: Colors.orange,
-          ),
-        );
       }
+
+      print('✅ Notifications created for scan: ${widget.scanId}');
 
       await AuditLogService.logAction(
         action: 'scan_completed',
@@ -182,10 +173,15 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         scanId: widget.scanId,
       );
     } catch (e) {
-      print('Error saving scan result: $e');
+      print('❌ Error in _saveScanResultToFirestore: $e');
     }
   }
 
+  Future<void> _saveScanOffline(Map<String, dynamic> scanData) async {
+    await OfflineSyncService().saveScanOffline(scanData);
+  }
+
+//
   List<String> getTipsForPrediction(String prediction) {
     final pred = prediction.toLowerCase();
     if (pred.contains('normal') || pred.contains('no cataract')) {

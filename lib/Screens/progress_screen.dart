@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/Screens/scoring_service.dart';
+import 'package:flutter_application_1/Screens/view_history_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -195,6 +196,52 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final Color statusColor =
         classification == "Normal" ? Colors.green : Colors.amber;
 
+    // ✅ NEW: Get comparison data
+    final int currentIndex =
+        progressData.indexWhere((s) => s["id"] == scan["id"]);
+    final Map<String, dynamic>? previousScan = _getPreviousScan(currentIndex);
+
+    String? comparisonText;
+    Color? comparisonColor;
+    IconData? comparisonIcon;
+    String? progressionStatus;
+
+    if (previousScan != null && previousScan["eye"] == eye) {
+      final prevClassification = previousScan["classification"] as String;
+      final prevDate = previousScan["date"] as DateTime;
+      final prevFormattedDate = DateFormat.yMMMMd().format(prevDate);
+
+      // Calculate progression
+      const severityMap = {
+        'Normal': 0,
+        'Immature': 1,
+        'Mature': 2,
+        'Advanced': 3,
+      };
+      final currentSeverity = severityMap[classification] ?? 0;
+      final previousSeverity = severityMap[prevClassification] ?? 0;
+
+      if (currentSeverity > previousSeverity) {
+        progressionStatus = 'WORSENING';
+        comparisonColor = Colors.red;
+        comparisonIcon = Icons.trending_down;
+        comparisonText =
+            'Compared to your scan on $prevFormattedDate:\n$prevClassification → $classification';
+      } else if (currentSeverity < previousSeverity) {
+        progressionStatus = 'IMPROVING';
+        comparisonColor = Colors.green;
+        comparisonIcon = Icons.trending_up;
+        comparisonText =
+            'Compared to your scan on $prevFormattedDate:\n$prevClassification → $classification';
+      } else {
+        progressionStatus = 'STABLE';
+        comparisonColor = Colors.orange;
+        comparisonIcon = Icons.trending_flat;
+        comparisonText =
+            'Compared to your scan on $prevFormattedDate:\nNo change in classification';
+      }
+    }
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -263,6 +310,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                   const SizedBox(height: 20),
                   Divider(color: Colors.grey.shade300),
                   const SizedBox(height: 10),
+
                   // Result summary
                   Row(
                     children: [
@@ -304,6 +352,89 @@ class _ProgressScreenState extends State<ProgressScreen> {
                       ),
                     ],
                   ),
+
+                  // ✅ NEW: Comparison Section
+                  if (comparisonText != null && comparisonColor != null) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: comparisonColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: comparisonColor.withOpacity(0.3),
+                          width: 2,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                comparisonIcon,
+                                color: comparisonColor,
+                                size: 22,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Progression: $progressionStatus',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: comparisonColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            comparisonText,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: comparisonColor.darken(0.2),
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ] else ...[
+                    // ✅ Show "First Scan" message if no comparison
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.blue.shade200,
+                          width: 2,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.fiber_new,
+                            color: Colors.blue.shade700,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'First scan of this eye - Complete another $eye scan to track progression',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.blue.shade900,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+
                   const SizedBox(height: 20),
                   // Details
                   Text(
@@ -322,6 +453,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   // Recommendations
                   Container(
                     padding: const EdgeInsets.all(14),
@@ -350,6 +482,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     ),
                   ),
                   const SizedBox(height: 22),
+
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -717,7 +850,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
                           TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                     const SizedBox(width: 8),
-                    // ✅ NEW: Progression logic tooltip
                     InkWell(
                       onTap: () {
                         showDialog(
@@ -831,23 +963,6 @@ class _ProgressScreenState extends State<ProgressScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
-                    // ✅ EXISTING: Health score info button
-                    InkWell(
-                      onTap: _showHealthScoreInfo,
-                      child: Container(
-                        padding: EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Color(0xFFFF6B6B).withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.help_outline,
-                          color: Color(0xFFFF6B6B),
-                          size: 20,
-                        ),
-                      ),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -858,13 +973,17 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
                 const SizedBox(height: 16),
 
-                // STATUS TIMELINE - REPLACING THE LINE CHART
+                // ✅ TIMELINE: Show ALL scans (complete progression view)
                 if (progressData.isEmpty)
                   _buildEmptyState(primaryColor)
                 else
-                  ..._buildTimelineCards(primaryColor),
+                  ..._buildTimelineCards(primaryColor), // ✅ No limit!
 
                 const SizedBox(height: 28),
+
+                const SizedBox(height: 28),
+
+// ✅ ALL SCANS SECTION - CLEAN VERSION (NO DUPLICATES)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -876,12 +995,23 @@ class _ProgressScreenState extends State<ProgressScreen> {
                         fontSize: 18,
                       ),
                     ),
-                    Text(
-                      '${progressData.length} scans',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 14,
+                    // ✅ Just "View All" button - no scan count
+                    TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const ViewHistoryScreen(),
+                          ),
+                        );
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: primaryColor,
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(60, 32),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
+                      child: const Text("View All"),
                     ),
                   ],
                 ),
@@ -932,24 +1062,16 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     ),
                   )
                 else
-                  ...progressData.map((scan) => _ProgressCard(
+                  // ✅ Show only first 5 scans - ONE TIME ONLY
+                  ...progressData.take(5).map((scan) => _ProgressCard(
                         scan: scan,
                         primaryColor: primaryColor,
                         onTap: () => _showScanDetails(scan),
                       )),
-                if (_hasMore)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Center(
-                      child: _isLoadingMore
-                          ? CircularProgressIndicator()
-                          : ElevatedButton(
-                              onPressed: () =>
-                                  _fetchProgressData(loadMore: true),
-                              child: Text('Load More'),
-                            ),
-                    ),
-                  ),
+
+                const SizedBox(height: 20),
+
+                const SizedBox(height: 20),
               ],
             ),
       bottomNavigationBar: _buildBottomNavigationBar(primaryColor),
@@ -1003,11 +1125,13 @@ class _ProgressScreenState extends State<ProgressScreen> {
     );
   }
 
-  /// Build timeline cards - NEW WIDGET REPLACING LINE CHART
   List<Widget> _buildTimelineCards(Color primaryColor) {
     final cards = <Widget>[];
 
-    for (int i = 0; i < progressData.length; i++) {
+    // ✅ Limit to 10 most recent scans
+    final int itemsToShow = progressData.length > 10 ? 10 : progressData.length;
+
+    for (int i = 0; i < itemsToShow; i++) {
       final scan = progressData[i];
       final previousScan = _getPreviousScan(i);
 

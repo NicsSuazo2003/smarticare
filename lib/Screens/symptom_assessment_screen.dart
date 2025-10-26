@@ -50,6 +50,7 @@ class _SymptomAssessmentScreenState extends State<SymptomAssessmentScreen>
   }
 
   // Method to navigate to Question 1 screen
+  // Method to navigate to Question 1 screen
   void _navigateToQuestionOne() {
     Navigator.push(
       context,
@@ -151,19 +152,22 @@ class _SymptomAssessmentScreenState extends State<SymptomAssessmentScreen>
                                 'Are you sure you want to cancel? You can complete this assessment later from the home screen.',
                               ),
                               actions: [
+                                // Cancel on the LEFT
                                 TextButton(
                                   onPressed: () =>
-                                      Navigator.of(context).pop(false),
-                                  child: const Text('Continue Assessment'),
+                                      Navigator.of(context).pop(true),
+                                  child: const Text('Cancel'),
                                 ),
+
+                                // Continue Assessment on the RIGHT (primary color, white text)
                                 ElevatedButton(
                                   onPressed: () =>
-                                      Navigator.of(context).pop(true),
+                                      Navigator.of(context).pop(false),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: primaryColor,
                                     foregroundColor: Colors.white,
                                   ),
-                                  child: const Text('Cancel'),
+                                  child: const Text('Continue Assessment'),
                                 ),
                               ],
                             ),
