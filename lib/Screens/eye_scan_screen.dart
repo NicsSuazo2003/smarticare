@@ -38,6 +38,9 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
   String _selectedEye = 'Left Eye';
   bool _isCameraActive = false;
   int _selectedNavIndex = 2;
+  CameraDescription? _selectedCamera;
+  bool _isFrontCamera = false;
+
   bool _poorLighting = false;
 
   CameraController? _cameraController;
@@ -173,7 +176,22 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
       _cameraController = null;
     }
 
-    final CameraDescription camera = _cameras[0];
+    // REPLACE THIS SECTION:
+    // final CameraDescription camera = _cameras[0];
+
+    // WITH THIS:
+    // Select camera based on preference
+    final CameraDescription camera = _isFrontCamera
+        ? _cameras.firstWhere(
+            (camera) => camera.lensDirection == CameraLensDirection.front,
+            orElse: () =>
+                _cameras.first, // Fallback to first camera if no front camera
+          )
+        : _cameras.firstWhere(
+            (camera) => camera.lensDirection == CameraLensDirection.back,
+            orElse: () =>
+                _cameras.first, // Fallback to first camera if no back camera
+          );
 
     _cameraController = CameraController(
       camera,
@@ -199,6 +217,23 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
     } on CameraException catch (e) {
       print('Error initializing camera: ${e.description}');
     }
+  }
+
+  // ADD THIS NEW METHOD:
+  Future<void> _toggleCamera() async {
+    if (_cameras.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only one camera available')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isFrontCamera = !_isFrontCamera;
+      _isCameraInitialized = false;
+    });
+
+    await _initializeCamera();
   }
 
   Future<void> _captureImage() async {
@@ -237,7 +272,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
       if (!isGuest) {
         try {
           LatestScanCache.updateLeftEye(
-              result['predictedClass'], result['confidence']);
+              result['predictedClass'], result['confidence'] * 100);
 
           // Check connectivity
           final connectivityResult = await Connectivity().checkConnectivity();
@@ -288,17 +323,26 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
             }
           } else {
             print('📴 Offline - saving to offline queue');
-            await OfflineSyncService().saveScanOffline({
-              'scanId': scanId,
-              'imageUrl': croppedImage.path,
-              'prediction': result['predictedClass'],
-              'confidence': result['confidence'],
-              'eye': _selectedEye,
-              'symptomScore': widget.symptomScore,
-              'scanDate': DateTime.now().toUtc().toString().split('.').first,
-              'userId': FirebaseAuth.instance.currentUser!.uid,
-            });
-            imageUrl = croppedImage.path;
+            try {
+              await OfflineSyncService().saveScanOffline({
+                'scanId': scanId,
+                'imageUrl': croppedImage.path,
+                'prediction': result['predictedClass'],
+                'confidence': result['confidence'],
+                'eye': _selectedEye,
+                'symptomScore': widget.symptomScore,
+                'scanDate': DateTime.now().toUtc().toString().split('.').first,
+                'userId': FirebaseAuth.instance.currentUser!.uid,
+                'timestamp':
+                    DateTime.now().toUtc().toIso8601String(), // Add this
+              });
+              imageUrl = croppedImage.path;
+              print('✅ Scan saved offline: $scanId');
+            } catch (e) {
+              print('❌ Error saving scan offline: $e');
+              // Still use local path even if offline save fails
+              imageUrl = croppedImage.path;
+            }
           }
         } catch (e) {
           print('❌ Failed to save scan: $e');
@@ -494,10 +538,10 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
 
           if (_selectedEye == 'Left Eye') {
             LatestScanCache.updateLeftEye(
-                result['predictedClass'], result['confidence']);
+                result['predictedClass'], result['confidence'] * 100);
           } else {
             LatestScanCache.updateRightEye(
-                result['predictedClass'], result['confidence']);
+                result['predictedClass'], result['confidence'] * 100);
           }
 
           final isGuest =
@@ -581,8 +625,27 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                 rethrow;
               }
             } else {
-              print('📴 Offline - using local image path');
-              imageUrl = croppedImage.path;
+              print(
+                  '📴 Offline - saving scan to offline queue and using local image path');
+              try {
+                await OfflineSyncService().saveScanOffline({
+                  'scanId': scanId,
+                  'imageUrl': croppedImage.path,
+                  'prediction': result['predictedClass'],
+                  'confidence': result['confidence'],
+                  'eye': _selectedEye,
+                  'symptomScore': widget.symptomScore,
+                  'scanDate':
+                      DateTime.now().toUtc().toString().split('.').first,
+                  'userId': FirebaseAuth.instance.currentUser!.uid,
+                  'timestamp': DateTime.now().toUtc().toIso8601String(),
+                });
+                imageUrl = croppedImage.path;
+                print('✅ Scan saved offline: $scanId');
+              } catch (e) {
+                print('❌ Error saving scan offline: $e');
+                imageUrl = croppedImage.path; // Still use local path
+              }
             }
           } else {
             imageUrl = croppedImage.path;
@@ -634,162 +697,41 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
     }
   }
 
-// Replace only the _cropImageToCenterSquare method with this:
+// This replaces the entire _cropImageToCenterSquare() method
   Future<File> _cropImageToCenterSquare(File imageFile) async {
     final bytes = await imageFile.readAsBytes();
     img.Image? oriImage = img.decodeImage(bytes);
     if (oriImage == null) throw Exception('Cannot decode image');
 
-    // STEP 1: EXTREME camera simulation
-
-    // Apply much stronger camera-like effects
-    img.Image processed = img.adjustColor(
-      oriImage,
-      contrast: 1.35, // Very high contrast
-      brightness: 0.9, // Darker
-      saturation: 0.85, // More desaturated
-    );
-
-    // Apply extreme screen-like texture
-    processed = _addExtremeScreenTexture(processed);
-
-    // Add stronger camera noise
-    processed = _addCameraNoise(processed, 8.0); // Much higher noise
-
-    // STEP 2: Crop and resize as before
+    // STEP 1: Crop to center square (no processing)
     int size =
-        processed.width < processed.height ? processed.width : processed.height;
+        oriImage.width < oriImage.height ? oriImage.width : oriImage.height;
     img.Image squareImage = img.copyCrop(
-      processed,
-      x: (processed.width - size) ~/ 2,
-      y: (processed.height - size) ~/ 2,
+      oriImage,
+      x: (oriImage.width - size) ~/ 2,
+      y: (oriImage.height - size) ~/ 2,
       width: size,
       height: size,
     );
 
-    // STEP 3: Resize and add blur
-    img.Image resized = img.copyResize(squareImage,
-        width: 224, height: 224, interpolation: img.Interpolation.cubic);
+    // STEP 2: Resize to 224x224 (model expects this)
+    img.Image resized = img.copyResize(
+      squareImage,
+      width: 224,
+      height: 224,
+      interpolation: img.Interpolation.cubic,
+    );
 
-    // Apply stronger blur
-    resized = img.gaussianBlur(resized, radius: 2); // More blur
-
-    // Save file
+    // STEP 3: Save file (normalization happens in tflite_helper.dart)
     final tempDir = Directory.systemTemp;
     final croppedPath =
-        '${tempDir.path}/gallery_processed_${DateTime.now().millisecondsSinceEpoch}.png';
+        '${tempDir.path}/gallery_${DateTime.now().millisecondsSinceEpoch}.png';
     final croppedFile = File(croppedPath);
     await croppedFile.writeAsBytes(img.encodePng(resized));
 
     return croppedFile;
   }
 
-// New method with extreme screen texture effect
-  img.Image _addExtremeScreenTexture(img.Image src) {
-    img.Image result = img.Image.from(src);
-    final random = Random();
-
-    // Create a stronger pixel grid effect
-    for (int y = 0; y < src.height; y++) {
-      for (int x = 0; x < src.width; x++) {
-        if ((x % 3 == 0 || y % 3 == 0)) {
-          final pixel = src.getPixel(x, y);
-
-          // More aggressive darkening of grid lines
-          int r = (pixel.r * 0.92).round().clamp(0, 255);
-          int g = (pixel.g * 0.92).round().clamp(0, 255);
-          int b = (pixel.b * 0.92).round().clamp(0, 255);
-
-          result.setPixel(x, y, img.ColorRgb8(r, g, b));
-        }
-
-        // Add a "screen glare" effect in some parts
-        if ((x + y) % 17 == 0 && random.nextDouble() > 0.7) {
-          final pixel = src.getPixel(x, y);
-
-          // Add slight highlight
-          int r = (pixel.r * 1.15).round().clamp(0, 255);
-          int g = (pixel.g * 1.15).round().clamp(0, 255);
-          int b = (pixel.b * 1.15).round().clamp(0, 255);
-
-          result.setPixel(x, y, img.ColorRgb8(r, g, b));
-        }
-      }
-    }
-
-    return result;
-  }
-
-// Add this new helper method to simulate screen pixels
-  img.Image _addScreenPattern(img.Image src) {
-    img.Image result = img.Image.from(src);
-    final random = Random();
-
-    // Create a subtle pixel grid effect (every 3-4 pixels)
-    for (int y = 0; y < src.height; y++) {
-      for (int x = 0; x < src.width; x++) {
-        if ((x % 3 == 0 || y % 3 == 0) && random.nextDouble() > 0.7) {
-          final pixel = src.getPixel(x, y);
-
-          // Slightly darken grid lines
-          int r = (pixel.r * 0.97).round().clamp(0, 255);
-          int g = (pixel.g * 0.97).round().clamp(0, 255);
-          int b = (pixel.b * 0.97).round().clamp(0, 255);
-
-          result.setPixel(x, y, img.ColorRgb8(r, g, b));
-        }
-      }
-    }
-
-    return result;
-  }
-
-// Helper function to calculate image intensity
-  double _calculateAverageIntensity(img.Image image) {
-    double totalIntensity = 0;
-    int pixels = 0;
-
-    // Sample every 5th pixel for performance
-    for (int y = 0; y < image.height; y += 5) {
-      for (int x = 0; x < image.width; x += 5) {
-        final pixel = image.getPixel(x, y);
-        final intensity = (pixel.r + pixel.g + pixel.b) / 3;
-        totalIntensity += intensity;
-        pixels++;
-      }
-    }
-
-    return pixels > 0 ? totalIntensity / pixels : 128;
-  }
-
-// Helper function to add realistic camera noise
-  img.Image _addCameraNoise(img.Image src, double amount) {
-    img.Image result = img.Image.from(src);
-    final random = Random();
-
-    for (int y = 0; y < src.height; y++) {
-      for (int x = 0; x < src.width; x++) {
-        // Only apply noise to some pixels
-        if (random.nextDouble() > 0.7) {
-          final pixel = src.getPixel(x, y);
-
-          // Generate noise values (-amount to +amount)
-          int noiseR = ((random.nextDouble() * 2 * amount) - amount).round();
-          int noiseG = ((random.nextDouble() * 2 * amount) - amount).round();
-          int noiseB = ((random.nextDouble() * 2 * amount) - amount).round();
-
-          // Apply noise - add explicit toInt() to fix type error
-          int r = (pixel.r + noiseR).clamp(0, 255).toInt();
-          int g = (pixel.g + noiseG).clamp(0, 255).toInt();
-          int b = (pixel.b + noiseB).clamp(0, 255).toInt();
-
-          result.setPixel(x, y, img.ColorRgb8(r, g, b));
-        }
-      }
-    }
-
-    return result;
-  }
 // Helper function to add realistic camera noise
 
   void _onNavItemTapped(int index) {
@@ -1106,7 +1048,6 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                 ),
               ),
             // Capture button
-
             Positioned(
               bottom: 40,
               left: 0,
@@ -1157,6 +1098,27 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
+                  ),
+                ),
+              ),
+            ),
+            // ADD THIS CAMERA SWITCH BUTTON:
+            // Camera switch button
+            Positioned(
+              top: 80,
+              left: 20,
+              child: GestureDetector(
+                onTap: _toggleCamera,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.5),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.cameraswitch_rounded,
+                    color: Colors.white,
+                    size: 24,
                   ),
                 ),
               ),

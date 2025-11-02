@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_application_1/Screens/scoring_service.dart';
 import 'package:hive/hive.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -334,6 +335,35 @@ class OfflineSyncService {
       print('✅ Image already has Storage URL');
     } else {
       print('⚠️ Unexpected imageUrl format: $currentImageUrl');
+    }
+
+    // Always recompute healthScore and riskLevel based on the latest data
+    final double? confidence = (onlineData['confidence'] as num?)?.toDouble();
+    final double? symptomScore =
+        (onlineData['symptomScore'] as num?)?.toDouble();
+    final String? prediction = onlineData['prediction'] as String?;
+    if (confidence != null && symptomScore != null && prediction != null) {
+      final scoring = ScoringService();
+      final healthScore = scoring
+          .calculateHealthScore(
+            imageScore: confidence,
+            symptomScore: symptomScore,
+            prediction: prediction,
+          )
+          .round();
+      onlineData['healthScore'] = healthScore;
+
+      // Correct riskLevel logic
+      if (healthScore >= 80) {
+        onlineData['riskLevel'] = "Low";
+      } else if (healthScore >= 60) {
+        onlineData['riskLevel'] = "Moderate";
+      } else {
+        onlineData['riskLevel'] = "High";
+      }
+    } else {
+      onlineData['healthScore'] = null;
+      onlineData['riskLevel'] = null;
     }
 
     // Remove offline-specific fields

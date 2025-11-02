@@ -2,6 +2,7 @@ import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_application_1/Screens/scoring_service.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'dart:math';
 import 'package:pdf/pdf.dart';
@@ -178,16 +179,27 @@ class _FullReportScreenState extends State<FullReportScreen> {
     return !(p.contains('normal') || p.contains('no cataract'));
   }
 
-  void _shareReport() {
-    AuditLogService.logAction(
-      action: 'report_shared',
-      details: 'ScanId: ${widget.scanId ?? "latest"}',
-    );
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Sharing report...'),
-        duration: Duration(seconds: 2),
-      ),
+  String _riskLevelFromScore(double score) {
+    if (score >= 80) return 'Low';
+    if (score >= 60) return 'Moderate';
+    return 'High';
+  }
+
+  double? _computeHealthScoreFallback(Map<String, dynamic>? scan) {
+    if (scan == null) return null;
+    final saved = (scan['healthScore'] as num?)?.toDouble();
+    if (saved != null && saved > 0) return saved;
+
+    final double? imageScore = (scan['confidence'] as num?)?.toDouble();
+    final double? symptomScore = (scan['symptomScore'] as num?)?.toDouble();
+    final String? prediction = scan['prediction'] as String?;
+    if (imageScore == null || symptomScore == null) return null;
+
+    final scoring = ScoringService();
+    return scoring.calculateHealthScore(
+      imageScore: imageScore,
+      symptomScore: symptomScore,
+      prediction: prediction,
     );
   }
 
@@ -207,6 +219,10 @@ class _FullReportScreenState extends State<FullReportScreen> {
   Future<void> _downloadPdf() async {
     final scan = _scan;
     DateTime? scanDateTime;
+    final double? pdfHealthScore = _computeHealthScoreFallback(scan);
+    final String pdfRiskLevel = (scan?['riskLevel'] as String?) ??
+        (pdfHealthScore != null ? _riskLevelFromScore(pdfHealthScore) : 'N/A');
+
     if (scan != null && scan['timestamp'] != null) {
       final ts = scan['timestamp'];
       if (ts is Timestamp) {
@@ -362,14 +378,12 @@ class _FullReportScreenState extends State<FullReportScreen> {
           pw.Row(children: [
             pw.Text('Health Score: ', style: const pw.TextStyle(fontSize: 13)),
             pw.Text(
-                scan?['healthScore'] != null
-                    ? '${(scan!['healthScore'] is double ? scan!['healthScore'].round() : scan!['healthScore'])}%'
-                    : 'N/A',
+                pdfHealthScore != null ? '${pdfHealthScore.round()}%' : 'N/A',
                 style: pw.TextStyle(
                     fontWeight: pw.FontWeight.bold, color: PdfColors.green800)),
             pw.SizedBox(width: 16),
             pw.Text('Risk Level: ', style: const pw.TextStyle(fontSize: 13)),
-            pw.Text('${scan?['riskLevel'] ?? 'N/A'}',
+            pw.Text(pdfRiskLevel,
                 style: pw.TextStyle(
                     fontWeight: pw.FontWeight.bold, color: PdfColors.red800)),
           ]),
@@ -503,6 +517,9 @@ class _FullReportScreenState extends State<FullReportScreen> {
     const Color primaryColor = Color(0xFFFF6B6B);
     const Color successColor = Color(0xFF28A745);
     final bool cataract = isCataractResult(_scan?['prediction']);
+    final double? uiHealthScore = _computeHealthScoreFallback(_scan);
+    final String uiRiskLevel = (_scan?['riskLevel'] as String?) ??
+        (uiHealthScore != null ? _riskLevelFromScore(uiHealthScore) : 'N/A');
 
     String displayName = _profile?['firstName'] ??
         _profile?['username'] ??
@@ -1370,6 +1387,40 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                   ),
                                 ),
                               ),
+                              // >>> Insert warning here <<
+                              if ((_scan?['riskLevel']?.toLowerCase() ==
+                                          'high' ||
+                                      isCataractResult(_scan?['prediction'])) &&
+                                  (_assessment?['conclusion']
+                                          ?.toLowerCase()
+                                          .contains('low risk') ??
+                                      false)) ...[
+                                const SizedBox(height: 12),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                        color: Colors.orange.shade200),
+                                  ),
+                                  padding: const EdgeInsets.all(12),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.info_outline,
+                                          color: Colors.orange.shade700),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          "A cataract was detected by the scan, but you reported few symptoms. Cataracts can develop before you notice symptoms. Please consult an eye care specialist even if you feel well.",
+                                          style: TextStyle(
+                                              color: Colors.orange.shade800,
+                                              fontSize: 13),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                   ),

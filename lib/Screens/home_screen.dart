@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +8,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
+import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'symptom_assessment_screen.dart';
 import 'find_clinics_screen.dart';
 import 'appointments_screen.dart';
@@ -41,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   List<Map<String, dynamic>> _recentScans = [];
+  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
 
   Map<String, dynamic> _eyeHealthData = {
     'leftEye': {'status': '', 'score': 0, 'stage': ''},
@@ -58,6 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchEyeHealthData();
     _fetchRecentActivities();
     _fetchRecentScans();
+    _setupConnectivityListener();
 
     // Initialize flutter_local_notifications
     const AndroidInitializationSettings initializationSettingsAndroid =
@@ -99,6 +103,34 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _setupConnectivityListener() {
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
+      (ConnectivityResult result) async {
+        if (result != ConnectivityResult.none) {
+          print('🌐 Back online - checking for pending sync...');
+
+          // Check sync stats first
+          final syncStats = await OfflineSyncService().getSyncStats();
+          if (syncStats['totalPending']! > 0) {
+            print(
+                '🔄 Found ${syncStats['totalPending']} pending items - starting sync...');
+            await OfflineSyncService().syncAllPendingData();
+
+            // Refresh data after sync
+            _fetchEyeHealthData();
+            _fetchRecentScans();
+          }
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
+
   // Add this method to your class
   Future<void> _fetchRecentScans() async {
     try {
@@ -107,24 +139,22 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Get scans from Firestore
-      final querySnapshot = await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('scans')
-          .orderBy('timestamp', descending: true)
-          .get();
+      // Use OfflineSyncService to get ALL scans (online + offline)
+      final List<Map<String, dynamic>> allScans =
+          await OfflineSyncService().getAllScans();
 
-      // Convert to list of maps
-      final scans = querySnapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id; // Add document ID
-        return data;
-      }).toList();
+      // Sort by timestamp (most recent first)
+      allScans.sort((a, b) {
+        final aTime = a['timestamp']?.toString() ?? '';
+        final bTime = b['timestamp']?.toString() ?? '';
+        return bTime.compareTo(aTime);
+      });
 
       setState(() {
-        _recentScans = scans;
+        _recentScans = allScans;
       });
+
+      print('✅ Loaded ${_recentScans.length} scans (online + offline)');
     } catch (e) {
       print('Error fetching recent scans: $e');
     }

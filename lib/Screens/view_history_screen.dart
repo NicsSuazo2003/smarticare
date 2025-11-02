@@ -7,6 +7,7 @@ import 'package:flutter_application_1/Screens/profile_screen.dart';
 import 'package:flutter_application_1/Screens/progress_screen.dart';
 import 'package:flutter_application_1/Screens/reminder_screen.dart';
 import 'package:flutter_application_1/Screens/symptom_assessment_screen.dart';
+import 'package:flutter_application_1/services/offline_sync_service.dart';
 
 class ViewHistoryScreen extends StatefulWidget {
   const ViewHistoryScreen({super.key});
@@ -35,31 +36,23 @@ class _ViewHistoryScreenState extends State<ViewHistoryScreen> {
         _isLoading = true;
       });
 
-      final userId = FirebaseAuth.instance.currentUser?.uid;
-      if (userId == null) {
-        setState(() {
-          _isLoading = false;
-        });
-        return;
-      }
+      // Use OfflineSyncService to get ALL scans (online + offline)
+      final List<Map<String, dynamic>> allScans =
+          await OfflineSyncService().getAllScans();
 
-      // Fetch scan history from Firestore
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('scans')
-          .orderBy('timestamp', descending: true)
-          .get();
-
-      // Convert Firestore documents to list of maps
+      // Convert to list of maps for the UI
       final List<Map<String, dynamic>> scans = [];
 
-      for (var doc in querySnapshot.docs) {
-        final data = doc.data();
+      for (var data in allScans) {
+        // Handle both Timestamp and String timestamps
+        dynamic timestamp = data['timestamp'];
+        DateTime? dateTime;
 
-        // Get timestamp and convert to DateTime
-        final timestamp = data['timestamp'] as Timestamp?;
-        final dateTime = timestamp?.toDate();
+        if (timestamp is Timestamp) {
+          dateTime = timestamp.toDate();
+        } else if (timestamp is String) {
+          dateTime = DateTime.tryParse(timestamp);
+        }
 
         // Format date and time
         final date = dateTime != null
@@ -84,7 +77,9 @@ class _ViewHistoryScreenState extends State<ViewHistoryScreen> {
 
         // Add to scan history
         scans.add({
-          "id": doc.id,
+          "id": data['scanId'] ??
+              data['id'] ??
+              'unknown', // Support multiple ID fields
           "date": date,
           "time": time,
           "eye": eye,
@@ -93,7 +88,8 @@ class _ViewHistoryScreenState extends State<ViewHistoryScreen> {
               : "${(confidence * 100).round()}%",
           "classification": classification,
           "result": result,
-          "rawData": data, // Keep the raw data for potential detailed view
+          "source": data['source'] ?? 'firestore', // Track source
+          "rawData": data,
         });
       }
 
@@ -101,6 +97,8 @@ class _ViewHistoryScreenState extends State<ViewHistoryScreen> {
         scanHistory = scans;
         _isLoading = false;
       });
+
+      print('✅ History loaded: ${scanHistory.length} scans');
     } catch (e) {
       print('Error fetching scan history: $e');
       setState(() {
