@@ -1114,7 +1114,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _buildProfileHeader(),
           _buildProfileDetails(),
           _buildSecuritySection(),
-          _buildAccountSection(),
           _buildSupportSection(),
 
           // Logout button
@@ -1369,7 +1368,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(width: 10),
                 const Text(
-                  'Security',
+                  'Security & Account',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -1394,6 +1393,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             title: 'Two-Factor Authentication',
             subtitle: 'Add extra security to your account',
             onTap: () => _show2FASettings(context),
+          ),
+          _buildSettingTile(
+            icon: Icons.pause_circle_outline,
+            title: 'Deactivate Account',
+            isDestructive: true,
+            onTap: () => _deactivateAccount(context),
             isLast: true,
           ),
         ],
@@ -1554,60 +1559,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       }
     }
-  }
-
-  Widget _buildAccountSection() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.account_circle_outlined,
-                  color: primaryColor,
-                  size: 20,
-                ),
-                const SizedBox(width: 10),
-                const Text(
-                  'Account',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Divider(height: 1),
-          _buildSettingTile(
-            icon: Icons.lock_outline,
-            title: 'Change Password',
-            onTap: () => _updatePassword(context), // ✅ USE THE ENHANCED VERSION
-          ),
-          _buildSettingTile(
-            icon: Icons.pause_circle_outline,
-            title: 'Deactivate Account',
-            isDestructive: true,
-            onTap: () => _deactivateAccount(context),
-            isLast: true,
-          ),
-        ],
-      ),
-    );
   }
 
 // Replace your existing _deactivateAccount with this version
