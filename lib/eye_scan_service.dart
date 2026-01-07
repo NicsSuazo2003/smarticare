@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_application_1/Screens/scoring_service.dart';
@@ -14,8 +13,6 @@ class EyeScanService {
 
   String? get currentUserId => _auth.currentUser?.uid;
 
-  /// Save scan result with health score and risk level
-  /// ✅ FIXED: Ensures image is uploaded FIRST, then saved to Firestore
   Future<String> saveScanResult({
     required File imageFile,
     required String prediction,
@@ -23,11 +20,12 @@ class EyeScanService {
     required String eye,
     required double symptomScore,
     required String scanId,
+    String? assessmentId, // ✅ NEW
   }) async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) throw Exception('User not logged in');
 
-    // ✅ STEP 1: Upload image FIRST with retry logic
+    // 1) Upload image first
     String imageUrl = '';
     int retryCount = 0;
     const maxRetries = 3;
@@ -35,18 +33,10 @@ class EyeScanService {
     while (retryCount < maxRetries && imageUrl.isEmpty) {
       try {
         imageUrl = await _uploadImageWithRetry(imageFile, scanId, retryCount);
-        print('✅ Image upload succeeded on attempt ${retryCount + 1}');
         break;
       } catch (e) {
         retryCount++;
-        print('⚠️ Upload attempt ${retryCount} failed: $e');
-
-        if (retryCount >= maxRetries) {
-          print('❌ All upload attempts failed. Last error: $e');
-          rethrow; // Don't save to Firestore if upload fails
-        }
-
-        // Wait before retry (exponential backoff)
+        if (retryCount >= maxRetries) rethrow;
         await Future.delayed(Duration(seconds: retryCount * 2));
       }
     }
@@ -55,14 +45,13 @@ class EyeScanService {
       throw Exception('Failed to upload image after $maxRetries attempts');
     }
 
-    // ✅ STEP 2: Calculate health score
+    // 2) Compute health score + risk level
     final double computedHealthScore = _scoringService.calculateHealthScore(
       imageScore: confidence,
       symptomScore: symptomScore,
       prediction: prediction,
     );
 
-    // ✅ STEP 3: Determine risk level
     String riskLevel;
     if (computedHealthScore >= 80) {
       riskLevel = "Low";
@@ -72,39 +61,32 @@ class EyeScanService {
       riskLevel = "High";
     }
 
-    // ✅ STEP 4: Save to Firestore with confirmed Storage URL
-    try {
-      await _firestore
-          .collection('users')
-          .doc(userId)
-          .collection('scans')
-          .doc(scanId)
-          .set({
-        'scanId': scanId,
-        'imageUrl': imageUrl, // ✅ Now guaranteed to be Storage URL
-        'originalImage': imageUrl,
-        'prediction': prediction,
-        'confidence': confidence,
-        'eye': eye,
-        'symptomScore': symptomScore,
-        'healthScore': computedHealthScore.round(),
-        'riskLevel': riskLevel,
-        'timestamp': FieldValue.serverTimestamp(),
-        'scanDate': DateTime.now().toUtc().toString().split('.').first,
-        'userId': userId,
-        'uploadedAt': FieldValue.serverTimestamp(), // Track upload time
-      }, SetOptions(merge: true));
+    // 3) Save scan (✅ includes assessmentId)
+    await _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('scans')
+        .doc(scanId)
+        .set({
+      'scanId': scanId,
+      'assessmentId': assessmentId, // ✅ NEW (can be null)
+      'imageUrl': imageUrl,
+      'originalImage': imageUrl,
+      'prediction': prediction,
+      'confidence': confidence,
+      'eye': eye,
+      'symptomScore': symptomScore,
+      'healthScore': computedHealthScore.round(),
+      'riskLevel': riskLevel,
+      'timestamp': FieldValue.serverTimestamp(),
+      'scanDate': DateTime.now().toUtc().toString().split('.').first,
+      'userId': userId,
+      'uploadedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
 
-      print('✅ Scan data saved to Firestore with Storage URL');
-      return scanId;
-    } catch (e) {
-      print('❌ Failed to save scan to Firestore: $e');
-      rethrow;
-    }
+    return scanId;
   }
 
-  /// Upload image with retry logic and better error handling
-  /// ✅ FIXED: Returns only when upload is completely verified
   Future<String> _uploadImageWithRetry(
     File imageFile,
     String scanId,
@@ -113,100 +95,38 @@ class EyeScanService {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) throw Exception('User not logged in');
 
-    try {
-      print('📤 Upload attempt ${attemptNumber + 1} - File: ${imageFile.path}');
+    final ref =
+        _storage.ref().child('eye_scans').child(userId).child('$scanId.jpg');
 
-      final fileSize = await imageFile.length();
-      print('📁 File size: ${(fileSize / 1024).toStringAsFixed(1)} KB');
+    final uploadTask = ref.putFile(
+      imageFile,
+      SettableMetadata(contentType: 'image/jpeg'),
+    );
 
-      if (fileSize == 0) {
-        throw Exception('Image file is empty (0 bytes)');
-      }
+    final taskSnapshot = await uploadTask.timeout(
+      const Duration(minutes: 5),
+      onTimeout: () => throw TimeoutException('Upload timeout after 5 minutes'),
+    );
 
-      if (fileSize > 50 * 1024 * 1024) {
-        // 50MB limit
-        throw Exception('Image file too large (max 50MB)');
-      }
-
-      // Create storage reference
-      final ref =
-          _storage.ref().child('eye_scans').child(userId).child('$scanId.jpg');
-
-      print('📍 Storage path: ${ref.fullPath}');
-
-      // Upload file
-      final uploadTask = ref.putFile(
-        imageFile,
-        SettableMetadata(
-          contentType: 'image/jpeg',
-          customMetadata: {
-            'scanId': scanId,
-            'userId': userId,
-            'uploadedAt': DateTime.now().toIso8601String(),
-          },
-        ),
-      );
-
-      // Monitor upload progress
-      uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
-        final progress =
-            (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        print(
-            '📊 Upload progress: ${progress.toStringAsFixed(1)}% (${snapshot.bytesTransferred}/${snapshot.totalBytes} bytes)');
-      });
-
-      // ✅ Wait for upload completion with timeout
-      final taskSnapshot = await uploadTask.timeout(
-        const Duration(minutes: 5), // Increased from 2 to 5 minutes
-        onTimeout: () {
-          throw TimeoutException('Upload timeout after 5 minutes');
-        },
-      );
-
-      print('✅ Upload completed: ${taskSnapshot.state}');
-
-      // ✅ Verify upload by getting download URL
-      final downloadUrl = await taskSnapshot.ref.getDownloadURL();
-
-      if (downloadUrl.isEmpty) {
-        throw Exception('Download URL is empty after upload');
-      }
-
-      if (!downloadUrl.startsWith('https://firebasestorage.googleapis.com/')) {
-        throw Exception('Invalid Storage URL: $downloadUrl');
-      }
-
-      print('✅ Download URL verified: $downloadUrl');
-      return downloadUrl;
-    } catch (e) {
-      print('❌ Upload error on attempt ${attemptNumber + 1}: $e');
-      rethrow;
+    final downloadUrl = await taskSnapshot.ref.getDownloadURL();
+    if (!downloadUrl.startsWith('https://firebasestorage.googleapis.com/')) {
+      throw Exception('Invalid Storage URL: $downloadUrl');
     }
+    return downloadUrl;
   }
 
-  /// Get user's scan history
   Future<List<Map<String, dynamic>>> getScanHistory() async {
-    if (currentUserId == null) {
-      throw Exception('User not authenticated');
-    }
+    if (currentUserId == null) throw Exception('User not authenticated');
 
-    try {
-      final querySnapshot = await _firestore
-          .collection('users')
-          .doc(currentUserId)
-          .collection('scans')
-          .orderBy('timestamp', descending: true)
-          .get();
+    final querySnapshot = await _firestore
+        .collection('users')
+        .doc(currentUserId)
+        .collection('scans')
+        .orderBy('timestamp', descending: true)
+        .get();
 
-      return querySnapshot.docs
-          .map((doc) => {
-                'id': doc.id,
-                ...doc.data(),
-              })
-          .toList();
-    } catch (e) {
-      print('Error getting scan history: $e');
-      rethrow;
-    }
+    return querySnapshot.docs
+        .map((doc) => {'id': doc.id, ...doc.data()})
+        .toList();
   }
 }

@@ -70,6 +70,7 @@ class OfflineSyncService {
       hiveCompatibleAssessmentData['offline'] = true;
       hiveCompatibleAssessmentData['createdOffline'] =
           DateTime.now().toIso8601String();
+      hiveCompatibleAssessmentData['synced'] = false; // ✅ Mark as NOT synced
 
       // Add to sync queue
       await syncQueue.put(assessmentId, {
@@ -398,7 +399,7 @@ class OfflineSyncService {
       }
     }
 
-    // Remove from sync queue
+    
     await syncQueue.delete(key);
     print('✅ Removed $key from sync queue');
   }
@@ -407,6 +408,13 @@ class OfflineSyncService {
   Future<void> _syncAssessmentData(String key, Map<String, dynamic> data,
       String userId, Box syncQueue) async {
     final onlineData = Map<String, dynamic>.from(data);
+
+    // ✅ FIX 1: Check if already synced to prevent re-sync duplicates
+    if (onlineData['synced'] == true) {
+      print('⚠️ Assessment $key already synced, skipping');
+      await syncQueue.delete(key);
+      return;
+    }
 
     // Remove offline-specific fields
     onlineData.remove('offline');
@@ -418,16 +426,26 @@ class OfflineSyncService {
     onlineData['syncedAt'] = FieldValue.serverTimestamp();
     onlineData['syncedFrom'] = 'offline';
 
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .collection('assessments')
-        .add(onlineData);
+    // ✅ FIX 2: Log before sync
+    print('🔄 Syncing assessment from offline queue: $key');
 
-    print('✅ Assessment synced: $key');
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('assessments')
+          .add(onlineData);
 
-    // Remove from sync queue
-    await syncQueue.delete(key);
+      print('✅ Assessment synced: $key');
+
+      // ✅ FIX 3: Only delete after successful sync
+      await syncQueue.delete(key);
+      print('✅ Removed $key from sync queue');
+    } catch (e) {
+      print('❌ Failed to sync assessment $key: $e');
+      // ✅ FIX 4: Don't delete on failure, let retry happen
+      rethrow;
+    }
   }
 
   /// Check sync status and pending items

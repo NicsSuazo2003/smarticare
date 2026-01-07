@@ -4,6 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_1/Screens/scoring_service.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
+import 'package:flutter_application_1/services/offline_sync_service.dart';
+import 'package:flutter_application_1/services/staging_service.dart';
 import 'dart:math';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -70,41 +72,151 @@ class _FullReportScreenState extends State<FullReportScreen> {
     DocumentSnapshot? scanDoc;
     Map<String, dynamic>? scan;
 
-    // Fetch scan: specific if scanId, else latest
+// Fetch scan: specific if scanId, else latest
     if (widget.scanId != null) {
-      scanDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('scans')
-          .doc(widget.scanId)
-          .get();
-      scan = scanDoc.exists ? scanDoc.data() as Map<String, dynamic>? : null;
+      try {
+        scanDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('scans')
+            .doc(widget.scanId)
+            .get()
+            .timeout(const Duration(seconds: 3));
+        scan = scanDoc.exists ? scanDoc.data() as Map<String, dynamic>? : null;
+        print('✅ Loaded scan from Firestore: ${widget.scanId}');
+      } catch (e) {
+        print('⚠️ Firestore fetch failed:  $e');
+        scan = null; // Will try offline below
+      }
     } else {
-      final scanDocs = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('scans')
-          .orderBy('timestamp', descending: true)
-          .limit(1)
-          .get();
-      scan = scanDocs.docs.isNotEmpty ? scanDocs.docs.first.data() : {};
-      scanDoc = scanDocs.docs.isNotEmpty ? scanDocs.docs.first : null;
+      try {
+        final scanDocs = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('scans')
+            .orderBy('timestamp', descending: true)
+            .limit(1)
+            .get()
+            .timeout(const Duration(seconds: 3));
+        scan = scanDocs.docs.isNotEmpty ? scanDocs.docs.first.data() : {};
+        scanDoc = scanDocs.docs.isNotEmpty ? scanDocs.docs.first : null;
+        print('✅ Loaded latest scan from Firestore');
+      } catch (e) {
+        print('⚠️ Firestore latest scan fetch failed: $e');
+        scan = null;
+      }
     }
 
-    // Ensure scan is never null
+// ✅ NEW: Fallback to offline cache if not found online
+    if (scan == null && widget.scanId != null && userId != null) {
+      try {
+        print('📴 Attempting to load from offline cache:  ${widget.scanId}');
+        final allScans = await OfflineSyncService().getAllScans();
+        final offlineScan = allScans.firstWhere(
+          (s) => s['scanId'] == widget.scanId,
+          orElse: () => {},
+        );
+        if (offlineScan.isNotEmpty) {
+          scan = offlineScan;
+          print('✅ Loaded scan from offline cache: ${widget.scanId}');
+        } else {
+          print('❌ Scan not found in offline cache:  ${widget.scanId}');
+        }
+      } catch (e) {
+        print('⚠️ Offline cache lookup failed: $e');
+      }
+    }
+
+// Ensure scan is never null
     scan ??= {};
 
-    // Fetch assessment: latest if none, else match timestamp if possible
-    QuerySnapshot assessmentDocs = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .collection('assessments')
-        .orderBy('timestamp', descending: true)
-        .limit(1)
-        .get();
-    Map<String, dynamic>? assessment = assessmentDocs.docs.isNotEmpty
-        ? assessmentDocs.docs.first.data() as Map<String, dynamic>
-        : {};
+    Map<String, dynamic>? assessment = {};
+
+    if (scan != null && scan['timestamp'] != null) {
+      try {
+        // ✅ FIX: Match by scanId instead of scanDate for more reliable linking
+        final scanId = widget.scanId ?? scan['scanId'];
+
+        if (scanId != null && scanId.isNotEmpty) {
+          // Try to find assessment that was created close to this scan
+          final scanTimestamp = scan['timestamp'];
+          DateTime? scanDateTime;
+
+          if (scanTimestamp is Timestamp) {
+            scanDateTime = scanTimestamp.toDate();
+          } else if (scanTimestamp is String) {
+            scanDateTime = DateTime.tryParse(scanTimestamp);
+          }
+
+          // Get all assessments and find the closest one by time
+          final assessmentDocs = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(userId)
+              .collection('assessments')
+              .orderBy('timestamp', descending: true)
+              .limit(5) // Get last 5 assessments
+              .get();
+
+          if (assessmentDocs.docs.isNotEmpty) {
+            // Find the assessment closest in time to the scan
+            Map<String, dynamic>? closestAssessment;
+            int smallestDifference = 999999999;
+
+            for (var doc in assessmentDocs.docs) {
+              final assessmentData = doc.data();
+              final assessmentTimestamp = assessmentData['timestamp'];
+
+              DateTime? assessmentDateTime;
+              if (assessmentTimestamp is Timestamp) {
+                assessmentDateTime = assessmentTimestamp.toDate();
+              } else if (assessmentTimestamp is String) {
+                assessmentDateTime = DateTime.tryParse(assessmentTimestamp);
+              }
+
+              // If both have timestamps, find the closest one (within 5 minutes)
+              if (scanDateTime != null && assessmentDateTime != null) {
+                final difference =
+                    assessmentDateTime.difference(scanDateTime).inSeconds.abs();
+                if (difference < smallestDifference && difference < 300) {
+                  // 5 minutes
+                  smallestDifference = difference;
+                  closestAssessment = assessmentData;
+                }
+              }
+            }
+
+            assessment = closestAssessment ?? {};
+            if (assessment.isNotEmpty) {
+              print(
+                  '✅ Loaded matching assessment (${smallestDifference}s difference)');
+            }
+          }
+        } else {
+          print('⚠️ No scanId found');
+        }
+      } catch (e) {
+        print('Error loading assessment: $e');
+        assessment = {};
+      }
+    } else {
+      // Fallback:  just get the latest assessment
+      try {
+        final assessmentDocs = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('assessments')
+            .orderBy('timestamp', descending: true)
+            .limit(1)
+            .get();
+
+        if (assessmentDocs.docs.isNotEmpty) {
+          assessment = assessmentDocs.docs.first.data() as Map<String, dynamic>;
+          print('⚠️ Using latest assessment as fallback');
+        }
+      } catch (e) {
+        print('Error loading latest assessment: $e');
+      }
+    }
 
     setState(() {
       _profile = profile;
@@ -155,6 +267,21 @@ class _FullReportScreenState extends State<FullReportScreen> {
     return date;
   }
 
+  String _generateShortId(String? patientId, String? scanId) {
+    // If patientId exists and is not empty, use first 6 characters
+    if (patientId != null && patientId.isNotEmpty) {
+      return 'SC-${patientId.substring(0, min(6, patientId.length)).toUpperCase()}';
+    }
+
+    // If scanId exists, use first 8 characters
+    if (scanId != null && scanId.isNotEmpty) {
+      return 'SC-${scanId.substring(0, min(8, scanId.length)).toUpperCase()}';
+    }
+
+    // Fallback to short timestamp-based ID
+    return 'SC-${(DateTime.now().millisecondsSinceEpoch % 1000000).toString().padLeft(6, '0')}';
+  }
+
   String _formatTimestamp(dynamic ts) {
     if (ts == null) return '';
     try {
@@ -183,6 +310,31 @@ class _FullReportScreenState extends State<FullReportScreen> {
     if (score >= 80) return 'Low';
     if (score >= 60) return 'Moderate';
     return 'High';
+  }
+
+  String _deriveStage(Map<String, dynamic>? scan) {
+    if (scan == null) return 'Unknown';
+
+    // Prefer saved field, if present from ScanResultScreen
+    final saved = scan['enhancedStaging'] as String?;
+    if (saved != null && saved.isNotEmpty) return saved;
+
+    final prediction = (scan['prediction'] as String?) ?? 'Normal';
+
+    // Clamp to 0..1 and ensure double
+    final double confidence =
+        ((((scan['confidence'] as num?) ?? 0.0).toDouble()).clamp(0.0, 1.0)
+                as num)
+            .toDouble();
+    final double symptom = ((((scan['symptomScore'] as num?) ?? 0.0).toDouble())
+            .clamp(0.0, 1.0) as num)
+        .toDouble();
+
+    return StagingService.determineStage(
+      prediction: prediction,
+      symptomScore: symptom,
+      confidence: confidence,
+    );
   }
 
   double? _computeHealthScoreFallback(Map<String, dynamic>? scan) {
@@ -218,6 +370,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
 
   Future<void> _downloadPdf() async {
     final scan = _scan;
+    final stage = _deriveStage(scan);
     DateTime? scanDateTime;
     final double? pdfHealthScore = _computeHealthScoreFallback(scan);
     final String pdfRiskLevel = (scan?['riskLevel'] as String?) ??
@@ -275,7 +428,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                     borderRadius: pw.BorderRadius.circular(8),
                   ),
                   child: pw.Text(
-                      '#${_profile?["patientId"] ?? widget.scanId ?? "SC${DateTime.now().millisecondsSinceEpoch % 100000}"}',
+                      '#${_generateShortId(_profile?["patientId"], widget.scanId)}',
                       style: pw.TextStyle(
                           color: PdfColors.teal800,
                           fontWeight: pw.FontWeight.bold))),
@@ -367,7 +520,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
             children: [
               pw.Text('Eye: ${scan?['eye'] ?? 'N/A'}',
                   style: const pw.TextStyle(fontSize: 13)),
-              pw.Text('Result: ${scan?['prediction'] ?? 'N/A'}',
+              pw.Text('Stage: $stage',
                   style: pw.TextStyle(
                       fontSize: 13,
                       fontWeight: pw.FontWeight.bold,
@@ -408,7 +561,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              ...getTipsForPrediction(scan?['prediction'] ?? '').map(
+              ...getTipsForPrediction(stage).map(
                 (tip) => pw.Padding(
                   padding: const pw.EdgeInsets.only(bottom: 4),
                   child: pw.Text(tip, style: const pw.TextStyle(fontSize: 12)),
@@ -1379,7 +1532,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                 ),
                                 child: Text(
                                   _assessment?['conclusion'] ??
-                                      'No conclusion found.',
+                                      'No assessment data',
                                   style: const TextStyle(
                                     fontSize: 14,
                                     height: 1.5,

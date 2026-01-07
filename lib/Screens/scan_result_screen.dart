@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/main.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
+import 'package:flutter_application_1/services/staging_service.dart';
 import '../Screens/scoring_service.dart';
 import 'full_report_screen.dart';
 import 'view_history_screen.dart';
@@ -165,6 +166,29 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       }
 
       print('✅ Notifications created for scan: ${widget.scanId}');
+      // Save enhanced staging back into the scan document
+      try {
+        final String enhancedStaging = StagingService.determineStage(
+          prediction: widget.prediction,
+          symptomScore: widget.symptomScore,
+          confidence: widget.confidence,
+        );
+
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('scans')
+            .doc(widget.scanId)
+            .update({
+          'enhancedStaging': enhancedStaging,
+          'healthScore': computedHealthScore.round(),
+          'riskLevel': riskLevel,
+        });
+
+        print('✅ enhancedStaging written: $enhancedStaging');
+      } catch (e) {
+        print('⚠️ Failed to write enhancedStaging: $e');
+      }
 
       await AuditLogService.logAction(
         action: 'scan_completed',
@@ -337,6 +361,12 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       imageScore: widget.confidence,
       symptomScore: widget.symptomScore,
       prediction: widget.prediction,
+    );
+
+    final String stage = StagingService.determineStage(
+      prediction: widget.prediction,
+      symptomScore: widget.symptomScore,
+      confidence: widget.confidence,
     );
 
     final isGuest = Provider.of<UserSessionProvider>(context).isGuest;
@@ -607,21 +637,19 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                         vertical: 12, horizontal: 16),
                                     child: Row(
                                       children: [
-                                        Expanded(
+                                        const Expanded(
                                           flex: 1,
                                           child: Text(
-                                            "${(widget.confidence * 100).toStringAsFixed(0)}%",
+                                            'Stage',
                                             style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                              color: classificationColor,
-                                            ),
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14),
                                           ),
                                         ),
                                         Expanded(
                                           flex: 1,
                                           child: Text(
-                                            widget.prediction,
+                                            stage,
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
                                               fontSize: 16,
@@ -633,9 +661,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                     ),
                                   ),
                                   Container(
-                                    height: 1,
-                                    color: Colors.grey.shade200,
-                                  ),
+                                      height: 1, color: Colors.grey.shade200),
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 12, horizontal: 16),
@@ -721,7 +747,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                               ),
                             ),
                             const SizedBox(height: 16),
-                            _buildTipsSection(widget.prediction),
+                            _buildTipsSection(stage),
                           ],
                         ),
                       ),

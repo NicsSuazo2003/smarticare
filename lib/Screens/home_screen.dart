@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
+import 'package:flutter_application_1/services/staging_service.dart';
 import 'symptom_assessment_screen.dart';
 import 'find_clinics_screen.dart';
 import 'appointments_screen.dart';
@@ -161,29 +162,42 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Color _getStatusColor(String status, bool isLeftEye) {
-    if (status.toLowerCase() == 'normal') {
-      return Colors.green;
-    } else if (status.toLowerCase() == 'immature') {
-      return Colors.amber;
-    } else if (status.toLowerCase() == 'unknown') {
-      return Colors.grey;
-    } else {
-      // Default colors
-      return isLeftEye ? Colors.amber : Colors.green;
-    }
+    final s = status.toLowerCase();
+    if (s == 'normal') return Colors.green;
+    if (s == 'immature') return Colors.amber;
+    if (s == 'mature') return Colors.orange; // NEW
+    if (s == 'advanced') return Colors.red; // NEW
+    if (s == 'unknown') return Colors.grey;
+    return isLeftEye ? Colors.amber : Colors.green;
   }
 
   String getEyeHealthStatusTitle() {
     final leftScore = _eyeHealthData['leftEye']['score'] as int;
     final rightScore = _eyeHealthData['rightEye']['score'] as int;
+    final leftStatus = _eyeHealthData['leftEye']['status'] as String;
+    final rightStatus = _eyeHealthData['rightEye']['status'] as String;
 
     if (leftScore == 0 && rightScore == 0) {
       return "No Data Yet";
     }
 
-    final overallScore = _eyeHealthData['overallScore'] as int;
+    // ✅ NEW: Check if EITHER eye has cataract
+    final bool hasCataract =
+        (leftStatus != 'Normal' && leftStatus != 'Unknown') ||
+            (rightStatus != 'Normal' && rightStatus != 'Unknown');
 
-    // ✅ Match tooltip logic (80-100, 60-79, <60)
+    if (hasCataract) {
+      // If any cataract detected, never show "Healthy Eyes"
+      final overallScore = _eyeHealthData['overallScore'] as int;
+      if (overallScore >= 60) {
+        return "Monitor Health";
+      } else {
+        return "Attention Needed";
+      }
+    }
+
+    // Only show "Healthy Eyes" if BOTH are normal
+    final overallScore = _eyeHealthData['overallScore'] as int;
     if (overallScore >= 80) {
       return "Healthy Eyes";
     } else if (overallScore >= 60) {
@@ -211,13 +225,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _getHealthDescription() {
     final overallScore = _eyeHealthData['overallScore'] as int;
+    final leftStatus = _eyeHealthData['leftEye']['status'] as String;
+    final rightStatus = _eyeHealthData['rightEye']['status'] as String;
 
+    // ✅ NEW: Check if ANY eye has cataract
+    final bool hasCataract =
+        (leftStatus != 'Normal' && leftStatus != 'Unknown') ||
+            (rightStatus != 'Normal' && rightStatus != 'Unknown');
+
+    if (hasCataract) {
+      if (overallScore >= 60) {
+        return "Early signs detected. Regular monitoring recommended.";
+      } else {
+        return "Cataract detected. Please consult a specialist soon.";
+      }
+    }
+
+    // Both eyes are normal
     if (overallScore >= 80) {
       return "Both eyes are in excellent condition with no signs of cataract.";
     } else if (overallScore >= 60) {
-      return "Early signs detected. Regular monitoring recommended.";
+      return "Eye health is good. Continue regular monitoring.";
     } else if (overallScore > 0) {
-      return "Cataract detected. Please consult a specialist soon.";
+      return "Your overall eye health score is based on the combined analysis of both eyes.";
     } else {
       return "Your overall eye health score is based on the combined analysis of both eyes.";
     }
@@ -392,7 +422,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final connectivity = Connectivity();
         final result = await connectivity.checkConnectivity();
         isOnline = result != ConnectivityResult.none;
-        print('🌐 Online: $isOnline');
+        print('🌐 Online:  $isOnline');
       } catch (e) {
         print('⚠️ Connectivity check failed: $e');
         isOnline = false;
@@ -424,24 +454,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 (data['healthScore'] as num?)?.toDouble() ?? 0.0;
             final double confidence =
                 (data['confidence'] as num?)?.toDouble() ?? 0.0;
+            final double symptomScore =
+                (data['symptomScore'] as num?)?.toDouble() ?? 0.0;
 
-            // ✅ Use healthScore if available, otherwise fallback to confidence * 100
+            final String stage = StagingService.determineStage(
+              prediction: prediction,
+              symptomScore: symptomScore.clamp(0.0, 1.0),
+              confidence: confidence.clamp(0.0, 1.0),
+            );
+
             final double finalScore =
                 healthScore > 0 ? healthScore : (confidence * 100);
 
-            print(
-                '🟢 LEFT - Prediction: $prediction, HealthScore: $finalScore');
-
-            final bool isNormal = prediction.toLowerCase().contains('normal') ||
-                prediction.toLowerCase() == "no cataract";
-
             leftEyeData = {
-              'status': isNormal ? 'Normal' : 'Immature',
+              'status': stage,
               'score': finalScore.round().clamp(0, 100),
-              'stage': isNormal ? 'No Cataract' : 'Initial Stage'
+              'stage': stage == 'Normal' ? 'No Cataract' : stage
             };
 
-            // ✅ Update cache with health score (not confidence!)
             LatestScanCache.updateLeftEye(prediction, finalScore);
             leftFetched = true;
           } else {
@@ -472,20 +502,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 (data['healthScore'] as num?)?.toDouble() ?? 0.0;
             final double confidence =
                 (data['confidence'] as num?)?.toDouble() ?? 0.0;
+            final double symptomScore =
+                (data['symptomScore'] as num?)?.toDouble() ?? 0.0;
+
+            final String stage = StagingService.determineStage(
+              prediction: prediction,
+              symptomScore: symptomScore.clamp(0.0, 1.0),
+              confidence: confidence.clamp(0.0, 1.0),
+            );
 
             final double finalScore =
                 healthScore > 0 ? healthScore : (confidence * 100);
 
-            print(
-                '🟢 RIGHT - Prediction: $prediction, HealthScore: $finalScore');
-
-            final bool isNormal = prediction.toLowerCase().contains('normal') ||
-                prediction.toLowerCase() == "no cataract";
-
             rightEyeData = {
-              'status': isNormal ? 'Normal' : 'Immature',
+              'status': stage,
               'score': finalScore.round().clamp(0, 100),
-              'stage': isNormal ? 'No Cataract' : 'Initial Stage'
+              'stage': stage == 'Normal' ? 'No Cataract' : stage
             };
 
             LatestScanCache.updateRightEye(prediction, finalScore);
@@ -500,40 +532,52 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       // ✅ FALLBACK: Use cache if Firestore failed or offline
-      if (!isOnline || (!leftFetched && !rightFetched)) {
-        print('📴 Using cached data...');
-
-        if (!leftFetched && LatestScanCache.hasEyeData(true)) {
+      // ✅ CRITICAL FIX: Check cache FIRST before defaulting
+      if (!leftFetched) {
+        print('📴 Checking LEFT eye cache...');
+        if (LatestScanCache.hasEyeData(true)) {
           final prediction = LatestScanCache.leftEyePrediction;
-          final healthScore = LatestScanCache.leftEyeHealthScore; // ✅ Now 0-100
+          final healthScore = LatestScanCache.leftEyeHealthScore;
 
           print('📦 Left eye from cache: $prediction, $healthScore%');
 
-          final bool isNormal = prediction.toLowerCase().contains('normal') ||
-              prediction.toLowerCase() == "no cataract";
+          final String stage = StagingService.determineStage(
+            prediction: prediction,
+            symptomScore: 0.0,
+            confidence: 0.0,
+          );
 
           leftEyeData = {
-            'status': isNormal ? 'Normal' : 'Immature',
-            'score': healthScore.round().clamp(0, 100), // ✅ No multiplication!
-            'stage': isNormal ? 'No Cataract' : 'Initial Stage'
+            'status': stage,
+            'score': healthScore.round().clamp(0, 100),
+            'stage': stage == 'Normal' ? 'No Cataract' : stage
           };
+        } else {
+          print('⚠️ No left eye data in cache');
         }
+      }
 
-        if (!rightFetched && LatestScanCache.hasEyeData(false)) {
+      if (!rightFetched) {
+        print('📴 Checking RIGHT eye cache.. .');
+        if (LatestScanCache.hasEyeData(false)) {
           final prediction = LatestScanCache.rightEyePrediction;
-          final healthScore =
-              LatestScanCache.rightEyeHealthScore; // ✅ Now 0-100
+          final healthScore = LatestScanCache.rightEyeHealthScore;
 
-          print('📦 Right eye from cache: $prediction, $healthScore%');
+          print('📦 Right eye from cache:  $prediction, $healthScore%');
 
-          final bool isNormal = prediction.toLowerCase().contains('normal') ||
-              prediction.toLowerCase() == "no cataract";
+          final String stage = StagingService.determineStage(
+            prediction: prediction,
+            symptomScore: 0.0,
+            confidence: 0.0,
+          );
 
           rightEyeData = {
-            'status': isNormal ? 'Normal' : 'Immature',
-            'score': healthScore.round().clamp(0, 100), // ✅ No multiplication!
-            'stage': isNormal ? 'No Cataract' : 'Initial Stage'
+            'status': stage,
+            'score': healthScore.round().clamp(0, 100),
+            'stage': stage == 'Normal' ? 'No Cataract' : stage
           };
+        } else {
+          print('⚠️ No right eye data in cache');
         }
       }
 
@@ -569,7 +613,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingMetrics = false;
       });
     } catch (e) {
-      print('❌ Error in _fetchEyeHealthData: $e');
+      print('❌ Error in _fetchEyeHealthData:  $e');
       setState(() {
         _isLoadingMetrics = false;
       });

@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/Screens/scoring_service.dart';
 import 'package:flutter_application_1/Screens/view_history_screen.dart';
+import 'package:flutter_application_1/services/staging_service.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -124,22 +125,53 @@ class _ProgressScreenState extends State<ProgressScreen> {
           final prediction = data['prediction'] as String? ?? 'Unknown';
           final numConfidence = (data['confidence'] as num?) ?? 0;
           final eye = data['eye'] as String? ?? 'Unknown';
-          final bool isNormal = prediction.toLowerCase().contains('normal') ||
-              prediction.toLowerCase() == "no cataract";
-          final classification = isNormal ? 'Normal' : 'Immature';
-          final result = isNormal ? 'No Cataract' : 'Initial Stage';
-          String details = isNormal
-              ? "Your eye health is excellent. No signs of cataract formation detected."
-              : "Early signs of cataract formation detected. Monitoring recommended.";
-          String recommendations = isNormal
-              ? "Continue with regular checkups every 6 months."
-              : "Schedule an appointment with an ophthalmologist for further evaluation.";
+          final double symptomScore = ((data['symptomScore'] as num?) ?? 0.0)
+              .toDouble()
+              .clamp(0.0, 1.0);
 
+// Stage (classification)
+          final String classification = StagingService.determineStage(
+            prediction: prediction,
+            symptomScore: symptomScore,
+            confidence: (numConfidence.toDouble()).clamp(0.0, 1.0),
+          );
+
+// ✅ FIX: Use classification directly as result
+          String result =
+              classification; // Shows: "Normal", "Immature", "Mature", or "Advanced"
+          String details;
+          String recommendations;
+
+          switch (classification) {
+            case 'Normal':
+              details =
+                  "Your eye health is excellent. No signs of cataract formation detected.";
+              recommendations =
+                  "Continue with regular checkups every 6–12 months.";
+              break;
+            case 'Immature':
+              details =
+                  "Early-stage cataract features present. Monitoring recommended based on symptoms.";
+              recommendations =
+                  "Protect from UV light, monitor symptoms, consider follow-up if changes occur.";
+              break;
+            case 'Mature':
+              details =
+                  "Cataract appears significant with functional impact reported.";
+              recommendations =
+                  "Schedule a consultation with an ophthalmologist within 1–2 months.";
+              break;
+            default: // Advanced
+              details =
+                  "Advanced cataract detected with notable functional impact.";
+              recommendations =
+                  "Consult an ophthalmologist as soon as possible for evaluation.";
+          }
+
+// Health score
           final scoringService = ScoringService();
-          final symptomScore = ((data['symptomScore'] as num?) ?? 0.5)
-              .toDouble(); // ✅ Convert to double
           final healthScore = scoringService.calculateHealthScore(
-            imageScore: numConfidence.toDouble(), // ✅ Convert to double
+            imageScore: numConfidence.toDouble(),
             symptomScore: symptomScore,
             prediction: prediction,
           );

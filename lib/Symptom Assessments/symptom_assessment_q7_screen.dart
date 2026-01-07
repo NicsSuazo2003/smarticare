@@ -186,6 +186,9 @@ class _SymptomAssessmentQ7ScreenState extends State<SymptomAssessmentQ7Screen> {
         isOnline = false;
       }
 
+      // ✅ FIX: Add flag to track if assessment was saved
+      bool assessmentSaved = false;
+
       if (isOnline && userId != null) {
         try {
           // ✅ ONLINE: Use Firestore timestamp
@@ -196,13 +199,12 @@ class _SymptomAssessmentQ7ScreenState extends State<SymptomAssessmentQ7Screen> {
             'riskLevel': normalizedRisk,
             'completed': true,
             'scanDate': DateTime.now().toUtc().toString().split('.').first,
-            'timestamp': FieldValue.serverTimestamp(), // Firestore timestamp
+            'timestamp': FieldValue.serverTimestamp(),
             'patientId': userId,
             'patientName': patientName,
             'notes': clinicalSummary,
           };
 
-          // Save with short timeout
           await _firestore
               .collection('users')
               .doc(userId)
@@ -210,19 +212,18 @@ class _SymptomAssessmentQ7ScreenState extends State<SymptomAssessmentQ7Screen> {
               .add(onlinePayload)
               .timeout(const Duration(seconds: 2));
           print('✅ Assessment saved to Firestore');
+          assessmentSaved = true; // ✅ Mark as saved
         } catch (e) {
-          print('⚠️ Failed to save assessment online, saving offline: $e');
-          // Save offline version
-          await _saveAssessmentOffline(allAnswers, symptomScore, conclusionText,
-              normalizedRisk, patientName, userId, clinicalSummary);
+          print('⚠️ Failed to save assessment online: $e');
+          assessmentSaved = false; // ✅ Mark as NOT saved
         }
-      } else {
-        print('📴 Offline - saving assessment to offline queue');
-        // ✅ OFFLINE: Save with regular timestamp
-        if (userId != null) {
-          await _saveAssessmentOffline(allAnswers, symptomScore, conclusionText,
-              normalizedRisk, patientName, userId, clinicalSummary);
-        }
+      }
+
+// ✅ FIX: Only save offline if NOT already saved online
+      if (!assessmentSaved && userId != null) {
+        print('📴 Saving assessment offline (online save failed or offline)');
+        await _saveAssessmentOffline(allAnswers, symptomScore, conclusionText,
+            normalizedRisk, patientName, userId, clinicalSummary);
       }
 
       // Navigate to EyeScanScreen always

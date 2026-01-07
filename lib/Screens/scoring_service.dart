@@ -33,7 +33,7 @@ class ScoringService {
         adjustedImageScore = 1.0 - imageScore;
       }
       // For normal: keep as is (high confidence = high health)
-    }
+    } 
 
     // High symptoms = low health (invert)
     double adjustedSymptomScore = 1.0 - symptomScore;

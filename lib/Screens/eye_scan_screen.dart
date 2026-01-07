@@ -5,6 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
+import 'package:flutter_application_1/Screens/scoring_service.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/eye_scan_service.dart';
 import 'dart:io';
@@ -25,7 +26,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class EyeScanScreen extends StatefulWidget {
   final double symptomScore;
-  const EyeScanScreen({super.key, required this.symptomScore});
+  final String? assessmentId;
+  const EyeScanScreen(
+      {super.key, required this.symptomScore, this.assessmentId});
 
   @override
   State<EyeScanScreen> createState() => _EyeScanScreenState();
@@ -262,6 +265,30 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
 
       final result = await CataractModel.predict(croppedImage);
 
+      // Calculate health score BEFORE caching
+      final scoringService = ScoringService();
+      final double computedHealthScore = scoringService.calculateHealthScore(
+        imageScore: result['confidence'],
+        symptomScore: widget.symptomScore,
+        prediction: result['predictedClass'],
+      );
+
+      // ✅ UPDATE CACHE IMMEDIATELY (ONCE) - persisted to Hive
+      print('🔵 _captureImage: _selectedEye = $_selectedEye');
+      if (_selectedEye == 'Left Eye') {
+        await LatestScanCache.updateLeftEye(
+            result['predictedClass'], computedHealthScore);
+        print(
+            '✅ Updated LEFT eye cache:  ${result['predictedClass']}, $computedHealthScore%');
+      } else {
+        await LatestScanCache.updateRightEye(
+            result['predictedClass'], computedHealthScore);
+        print(
+            '✅ Updated RIGHT eye cache: ${result['predictedClass']}, $computedHealthScore%');
+      }
+      print(
+          '🔵 Cache status - Left:  ${LatestScanCache.leftEyePrediction} (${LatestScanCache.leftEyeHealthScore}%), Right: ${LatestScanCache.rightEyePrediction} (${LatestScanCache.rightEyeHealthScore}%)');
+
       final isGuest =
           Provider.of<UserSessionProvider>(context, listen: false).isGuest;
 
@@ -271,15 +298,11 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
 
       if (!isGuest) {
         try {
-          LatestScanCache.updateLeftEye(
-              result['predictedClass'], result['confidence'] * 100);
-
           // Check connectivity
           final connectivityResult = await Connectivity().checkConnectivity();
 
           if (connectivityResult != ConnectivityResult.none) {
             try {
-              // ✅ FIXED: saveScanResult now handles upload and returns verified scanId
               await _eyeScanService
                   .saveScanResult(
                     imageFile: croppedImage,
@@ -288,10 +311,11 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                     eye: _selectedEye,
                     symptomScore: widget.symptomScore,
                     scanId: scanId,
+                    assessmentId: widget.assessmentId,
                   )
                   .timeout(const Duration(seconds: 60));
 
-              // ✅ Verify the saved document
+              // Verify the saved document
               final doc = await FirebaseFirestore.instance
                   .collection('users')
                   .doc(FirebaseAuth.instance.currentUser!.uid)
@@ -303,29 +327,29 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
               if (doc.exists && doc.data() != null) {
                 final savedImageUrl = doc.data()!['imageUrl'];
 
-                // ✅ Verify it's a Storage URL
                 if (savedImageUrl != null &&
                     savedImageUrl.startsWith(
                         'https://firebasestorage.googleapis.com/')) {
                   imageUrl = savedImageUrl;
-                  print('✅ Confirmed Storage URL: $imageUrl');
+                  print(' Confirmed Storage URL: $imageUrl');
                 } else {
                   print(
-                      '❌ ERROR: Saved URL is not a Storage URL: $savedImageUrl');
+                      'ERROR:  Saved URL is not a Storage URL:  $savedImageUrl');
                   throw Exception('Image not properly uploaded to Storage');
                 }
               } else {
                 throw Exception('Scan document not found in Firestore');
               }
             } catch (e) {
-              print('⚠️ Online save failed: $e');
-              throw e; // Don't fallback to local path - inform user
+              print(' Online save failed: $e');
+              throw e;
             }
           } else {
-            print('📴 Offline - saving to offline queue');
+            print('Offline - saving to offline queue');
             try {
               await OfflineSyncService().saveScanOffline({
                 'scanId': scanId,
+                'assessmentId': widget.assessmentId,
                 'imageUrl': croppedImage.path,
                 'prediction': result['predictedClass'],
                 'confidence': result['confidence'],
@@ -333,21 +357,18 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                 'symptomScore': widget.symptomScore,
                 'scanDate': DateTime.now().toUtc().toString().split('.').first,
                 'userId': FirebaseAuth.instance.currentUser!.uid,
-                'timestamp':
-                    DateTime.now().toUtc().toIso8601String(), // Add this
+                'timestamp': DateTime.now().toUtc().toIso8601String(),
               });
               imageUrl = croppedImage.path;
-              print('✅ Scan saved offline: $scanId');
+              print('✅ Scan saved offline:  $scanId');
             } catch (e) {
               print('❌ Error saving scan offline: $e');
-              // Still use local path even if offline save fails
               imageUrl = croppedImage.path;
             }
           }
         } catch (e) {
-          print('❌ Failed to save scan: $e');
+          print('❌ Failed to save scan:  $e');
 
-          // Show error to user instead of silently failing
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -363,7 +384,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
         scanId = 'guest_scan_${DateTime.now().millisecondsSinceEpoch}';
       }
 
-      // ✅ Navigate with verified URL
+      // Navigate with verified URL
       if (mounted) {
         Navigator.push(
           context,
@@ -385,7 +406,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString()}'),
+            content: Text('Error:  ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -536,12 +557,28 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
           print(
               'Prediction result: ${result['predictedClass']}, confidence: ${result['confidence']}');
 
+// NEW:  Calculate health score for gallery uploads too
+          final scoringService = ScoringService();
+          final double computedHealthScore =
+              scoringService.calculateHealthScore(
+            imageScore: result['confidence'],
+            symptomScore: widget.symptomScore,
+            prediction: result['predictedClass'],
+          );
+
+//  CHANGED: Use computed health score
+          // ✅ UPDATE CACHE IMMEDIATELY - BEFORE saving online/offline
+          print('🔵 _captureImage: _selectedEye = $_selectedEye');
           if (_selectedEye == 'Left Eye') {
-            LatestScanCache.updateLeftEye(
-                result['predictedClass'], result['confidence'] * 100);
+            await LatestScanCache.updateLeftEye(
+                result['predictedClass'], computedHealthScore);
+            print(
+                '✅ Updated LEFT eye cache:   ${result['predictedClass']}, $computedHealthScore%');
           } else {
-            LatestScanCache.updateRightEye(
-                result['predictedClass'], result['confidence'] * 100);
+            await LatestScanCache.updateRightEye(
+                result['predictedClass'], computedHealthScore);
+            print(
+                '✅ Updated RIGHT eye cache:  ${result['predictedClass']}, $computedHealthScore%');
           }
 
           final isGuest =
@@ -631,6 +668,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                 await OfflineSyncService().saveScanOffline({
                   'scanId': scanId,
                   'imageUrl': croppedImage.path,
+                  'assessmentId': widget.assessmentId,
                   'prediction': result['predictedClass'],
                   'confidence': result['confidence'],
                   'eye': _selectedEye,

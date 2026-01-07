@@ -193,51 +193,6 @@ class _ClinicDetailScreenState extends State<ClinicDetailScreen> {
                       // Quick Info Grid
                       Row(
                         children: [
-                          // Distance Card
-                          Expanded(
-                            child: Card(
-                              elevation: cardElevation,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: cardRadius),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16.0),
-                                child: Column(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: primaryColor.withOpacity(0.1),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        Icons.directions_walk,
-                                        color: primaryColor,
-                                        size: 24,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Distance',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      clinic["distance"] ?? "N/A",
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: primaryColor,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
                           const SizedBox(width: 12),
 
                           // Hours Card

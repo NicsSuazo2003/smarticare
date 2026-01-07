@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
 import 'package:flutter_application_1/reminder_model.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'firebase_options.dart';
@@ -20,7 +21,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'screens/complete_profile_screen.dart'; // added
+import 'screens/complete_profile_screen.dart';
+
+// ✅ ADD THIS IMPORT
+import 'package:flutter_application_1/services/one_time_scan_migration.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -138,12 +142,19 @@ void main() async {
 
     await Hive.initFlutter();
     Hive.registerAdapter(ReminderAdapter());
+
+    // ✅ Open all Hive boxes
     await Hive.openBox<Reminder>('remindersBox');
     await Hive.openBox('clinicsBox');
     await Hive.openBox('scansBox');
     await Hive.openBox('userProfileBox');
     await Hive.openBox('syncQueueBox');
+    await Hive.openBox<Map>('latestScansCache'); // ✅ ADD THIS LINE
     print('✅ Hive initialized with all boxes');
+
+    // ✅ ADD THIS:  Initialize LatestScanCache
+    await LatestScanCache.initialize();
+    print('✅ LatestScanCache initialized');
 
     runApp(
       MultiProvider(
@@ -220,7 +231,6 @@ class ConnectivityProvider extends ChangeNotifier {
 
   Future<void> _syncPendingData() async {
     try {
-      // ✅ FIX: Actually call the sync service
       await OfflineSyncService().syncAllPendingData();
       print('✅ All pending data synced via OfflineSyncService');
     } catch (e) {
@@ -239,9 +249,8 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   bool _isLoading = true;
   bool _hasSeenWelcome = false;
-  bool _isAuthenticated = false; // Track authentication state
-  bool _needsProfileCompletion =
-      false; // NEW: whether authenticated user needs profile
+  bool _isAuthenticated = false;
+  bool _needsProfileCompletion = false;
 
   @override
   void initState() {
@@ -279,16 +288,13 @@ class _MyAppState extends State<MyApp> {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // CHECK AUTHENTICATION STATE FIRST
       final user = FirebaseAuth.instance.currentUser;
       final isAuthenticated = user != null;
 
-      // DEBUG LOGS
       print('🔍 hasSeenWelcome: ${prefs.getBool('hasSeenWelcome')}');
       print('🔍 Current User: ${user?.email ?? "No user"}');
       print('🔍 isAuthenticated: $isAuthenticated');
 
-      // Initialize default clinics
       final clinicBox = await Hive.openBox('clinicsBox');
       final clinics = clinicBox.get('clinics', defaultValue: []);
 
@@ -319,7 +325,6 @@ class _MyAppState extends State<MyApp> {
         }
       }
 
-      // NEW: check for Firestore profile existence when authenticated
       bool needsProfile = false;
       if (isAuthenticated && user != null) {
         try {
@@ -361,9 +366,7 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  // Determine which home widget to show based on auth and profile completion
   Widget _determineHomeWidget() {
-    // If authenticated and profile incomplete -> go to CompleteProfileScreen
     if (_isAuthenticated) {
       if (_needsProfileCompletion) {
         final user = FirebaseAuth.instance.currentUser!;
@@ -383,7 +386,6 @@ class _MyAppState extends State<MyApp> {
         );
       }
 
-      // otherwise show home
       print('✅ User authenticated - showing HomeScreen');
       return const HomeScreen();
     } else {
@@ -526,5 +528,3 @@ class _MyAppState extends State<MyApp> {
     );
   }
 }
-
-// REMOVED AuthWrapper - no longer needed
