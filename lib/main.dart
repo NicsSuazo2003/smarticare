@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
+import 'package:flutter_application_1/features/eye_scan/data/latest_scan_cache.dart';
 import 'package:flutter_application_1/data/models/reminder_model.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'firebase_options.dart';

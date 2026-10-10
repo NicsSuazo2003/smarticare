@@ -6,7 +6,7 @@ import 'package:flutter_application_1/features/home/presentation/home_screen.dar
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/features/auth/presentation/login.dart';
 import 'package:intl/intl.dart';
-import '../../../Screens/eye_scan_screen.dart';
+import '../../../features/eye_scan/presentation/eye_scan_screen.dart';
 import '../../../Screens/symptom_assessment_screen.dart';
 
 class CompleteProfileScreen extends StatefulWidget {

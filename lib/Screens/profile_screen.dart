@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
+import 'package:flutter_application_1/features/eye_scan/data/latest_scan_cache.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';

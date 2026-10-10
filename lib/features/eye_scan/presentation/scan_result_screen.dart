@@ -9,18 +9,18 @@ import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'package:flutter_application_1/services/referral_service.dart';
 import 'package:flutter_application_1/services/ml/staging_service.dart';
 import 'package:flutter_application_1/services/treatment_recommendation_service.dart';
-import '../Screens/scoring_service.dart';
+import '../../../Screens/scoring_service.dart';
 import 'full_report_screen.dart';
-import 'view_history_screen.dart';
-import 'reminder_screen.dart';
-import 'profile_screen.dart';
-import '../features/home/presentation/home_screen.dart';
-import 'progress_screen.dart';
+import '../../../Screens/view_history_screen.dart';
+import '../../../Screens/reminder_screen.dart';
+import '../../../Screens/profile_screen.dart';
+import '../../home/presentation/home_screen.dart';
+import '../../../Screens/progress_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'symptom_assessment_screen.dart';
+import '../../../Screens/symptom_assessment_screen.dart';
 import 'package:provider/provider.dart';
-import '../features/auth/providers/user_session_provider.dart';
+import '../../auth/providers/user_session_provider.dart';
 
 class ScanResultScreen extends StatefulWidget {
   final String imageUrl;

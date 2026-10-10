@@ -4,7 +4,7 @@ import 'dart:math';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
+import 'package:flutter_application_1/features/eye_scan/data/latest_scan_cache.dart';
 import 'package:flutter_application_1/Screens/scoring_service.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/eye_scan_service.dart';
@@ -12,15 +12,15 @@ import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '../services/offline_sync_service.dart';
+import '../../../services/offline_sync_service.dart';
 import 'scan_result_screen.dart';
-import '../features/home/presentation/home_screen.dart';
-import 'progress_screen.dart';
-import 'reminder_screen.dart';
-import 'profile_screen.dart';
-import 'tflite_helper.dart'; // Your model helper
+import '../../home/presentation/home_screen.dart';
+import '../../../Screens/progress_screen.dart';
+import '../../../Screens/reminder_screen.dart';
+import '../../../Screens/profile_screen.dart';
+import '../../../Screens/tflite_helper.dart'; // Your model helper
 import 'package:provider/provider.dart';
-import '../features/auth/providers/user_session_provider.dart';
+import '../../auth/providers/user_session_provider.dart';
 import 'package:image/image.dart' as img;
 import 'package:cloud_firestore/cloud_firestore.dart';
 

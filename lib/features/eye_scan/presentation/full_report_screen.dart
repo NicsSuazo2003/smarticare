@@ -10,8 +10,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
-import 'find_clinics_screen.dart';
-import 'reminder_screen.dart';
+import '../../../Screens/find_clinics_screen.dart';
+import '../../../Screens/reminder_screen.dart';
 
 class FullReportScreen extends StatefulWidget {
   final String? scanId;

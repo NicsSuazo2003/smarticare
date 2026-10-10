@@ -5,7 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_application_1/Screens/eye_scan_screen.dart';
+import 'package:flutter_application_1/features/eye_scan/presentation/eye_scan_screen.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:provider/provider.dart';
 import '../features/symptom_assessment/providers/symptom_assessment_provider.dart';
