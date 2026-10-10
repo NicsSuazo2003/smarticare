@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
-import 'package:flutter_application_1/services/staging_service.dart';
+import 'package:flutter_application_1/services/ml/staging_service.dart';
 import 'symptom_assessment_screen.dart';
 import 'find_clinics_screen.dart';
 import 'appointments_screen.dart';

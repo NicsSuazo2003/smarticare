@@ -7,7 +7,7 @@ import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/main.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'package:flutter_application_1/services/referral_service.dart';
-import 'package:flutter_application_1/services/staging_service.dart';
+import 'package:flutter_application_1/services/ml/staging_service.dart';
 import 'package:flutter_application_1/services/treatment_recommendation_service.dart';
 import '../Screens/scoring_service.dart';
 import 'full_report_screen.dart';

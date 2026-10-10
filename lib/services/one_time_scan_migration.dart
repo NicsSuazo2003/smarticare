@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_1/Screens/scoring_service.dart';
-import 'package:flutter_application_1/services/staging_service.dart';
+import 'package:flutter_application_1/services/ml/staging_service.dart';
 
 /// ONE-TIME MIGRATION SCRIPT
 /// Run this once to update all legacy scans with enhanced staging data
