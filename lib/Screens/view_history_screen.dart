@@ -6,7 +6,7 @@ import 'package:flutter_application_1/features/home/presentation/home_screen.dar
 import 'package:flutter_application_1/Screens/profile_screen.dart';
 import 'package:flutter_application_1/Screens/progress_screen.dart';
 import 'package:flutter_application_1/Screens/reminder_screen.dart';
-import 'package:flutter_application_1/Screens/symptom_assessment_screen.dart';
+import 'package:flutter_application_1/features/symptom_assessment/presentation/symptom_assessment_screen.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
 
 class ViewHistoryScreen extends StatefulWidget {

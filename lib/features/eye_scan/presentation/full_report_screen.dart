@@ -2,7 +2,7 @@ import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_application_1/Screens/scoring_service.dart';
+import 'package:flutter_application_1/features/symptom_assessment/services/scoring_service.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/services/ml/staging_service.dart';
 import 'dart:math';

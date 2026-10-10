@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/Screens/scoring_service.dart';
+import 'package:flutter_application_1/features/symptom_assessment/services/scoring_service.dart';
 import 'package:flutter_application_1/Screens/view_history_screen.dart';
 import 'package:flutter_application_1/services/ml/staging_service.dart';
 import 'package:intl/intl.dart';
@@ -10,7 +10,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../features/home/presentation/home_screen.dart';
 import 'reminder_screen.dart';
 import 'profile_screen.dart';
-import 'symptom_assessment_screen.dart';
+import '../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({super.key});

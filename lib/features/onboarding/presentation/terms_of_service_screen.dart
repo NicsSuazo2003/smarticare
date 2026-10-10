@@ -3,7 +3,7 @@ import '../../../features/home/presentation/home_screen.dart';
 import '../../../Screens/progress_screen.dart';
 import '../../../Screens/reminder_screen.dart';
 import '../../../Screens/profile_screen.dart';
-import '../../../Screens/symptom_assessment_screen.dart';
+import '../../../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
 
 class TermsOfServiceScreen extends StatefulWidget {
   const TermsOfServiceScreen({super.key});

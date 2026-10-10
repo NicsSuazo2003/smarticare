@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../Symptom Assessments/symptom_assessment_q1_screen.dart'; // Import the Q1 screen
+import 'symptom_assessment_q1_screen.dart'; // Import the Q1 screen
 
 class SymptomAssessmentScreen extends StatefulWidget {
   const SymptomAssessmentScreen({super.key, required Null Function() onStart});

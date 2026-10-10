@@ -3,7 +3,7 @@ import '../features/home/presentation/home_screen.dart';
 import 'progress_screen.dart';
 import 'reminder_screen.dart';
 import 'profile_screen.dart';
-import 'symptom_assessment_screen.dart';
+import '../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
 
 class ContactSupportScreen extends StatefulWidget {
   const ContactSupportScreen({super.key});

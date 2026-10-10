@@ -5,7 +5,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/features/eye_scan/data/latest_scan_cache.dart';
-import 'package:flutter_application_1/Screens/scoring_service.dart';
+import 'package:flutter_application_1/features/symptom_assessment/services/scoring_service.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/eye_scan_service.dart';
 import 'dart:io';

@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_application_1/Screens/scoring_service.dart';
+import 'package:flutter_application_1/features/symptom_assessment/services/scoring_service.dart';
 import 'package:flutter_application_1/services/ml/staging_service.dart';
 
 /// ONE-TIME MIGRATION SCRIPT

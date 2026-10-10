@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_1/features/auth/presentation/complete_profile_screen.dart';
 import 'package:flutter_application_1/features/auth/presentation/forgot_password_screen.dart';
 import 'package:flutter_application_1/features/eye_scan/data/latest_scan_cache.dart';
-import 'package:flutter_application_1/Screens/symptom_assessment_screen.dart';
+import 'package:flutter_application_1/features/symptom_assessment/presentation/symptom_assessment_screen.dart';
 import 'package:flutter_application_1/features/onboarding/presentation/terms_of_service_screen.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/services/otp_service.dart';

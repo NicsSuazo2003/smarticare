@@ -2,14 +2,14 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/Screens/referral_criteria_widget.dart';
+import 'package:flutter_application_1/features/symptom_assessment/presentation/referral_criteria_widget.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/main.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'package:flutter_application_1/services/referral_service.dart';
 import 'package:flutter_application_1/services/ml/staging_service.dart';
 import 'package:flutter_application_1/services/treatment_recommendation_service.dart';
-import '../../../Screens/scoring_service.dart';
+import '../../../features/symptom_assessment/services/scoring_service.dart';
 import 'full_report_screen.dart';
 import '../../../Screens/view_history_screen.dart';
 import '../../../Screens/reminder_screen.dart';
@@ -18,7 +18,7 @@ import '../../home/presentation/home_screen.dart';
 import '../../../Screens/progress_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../Screens/symptom_assessment_screen.dart';
+import '../../../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/user_session_provider.dart';
 
