@@ -16,7 +16,7 @@ import '../../../services/offline_sync_service.dart';
 import 'scan_result_screen.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../../Screens/progress_screen.dart';
-import '../../../Screens/reminder_screen.dart';
+import '../../../features/reminders/presentation/reminder_screen.dart';
 import '../../../Screens/profile_screen.dart';
 import '../../../Screens/tflite_helper.dart'; // Your model helper
 import 'package:provider/provider.dart';

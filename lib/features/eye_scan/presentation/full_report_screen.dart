@@ -11,7 +11,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../../Screens/find_clinics_screen.dart';
-import '../../../Screens/reminder_screen.dart';
+import '../../../features/reminders/presentation/reminder_screen.dart';
 
 class FullReportScreen extends StatefulWidget {
   final String? scanId;

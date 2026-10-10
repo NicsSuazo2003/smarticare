@@ -12,7 +12,7 @@ import 'package:flutter_application_1/services/treatment_recommendation_service.
 import '../../../features/symptom_assessment/services/scoring_service.dart';
 import 'full_report_screen.dart';
 import '../../../Screens/view_history_screen.dart';
-import '../../../Screens/reminder_screen.dart';
+import '../../../features/reminders/presentation/reminder_screen.dart';
 import '../../../Screens/profile_screen.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../../Screens/progress_screen.dart';

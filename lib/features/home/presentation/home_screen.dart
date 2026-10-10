@@ -14,7 +14,7 @@ import '../../../features/symptom_assessment/presentation/symptom_assessment_scr
 import '../../../Screens/find_clinics_screen.dart';
 import '../../../Screens/appointments_screen.dart';
 import '../../../Screens/progress_screen.dart';
-import '../../../Screens/reminder_screen.dart';
+import '../../../features/reminders/presentation/reminder_screen.dart';
 import '../../../Screens/profile_screen.dart';
 import '../../../Screens/activity_log_screen.dart';
 import '../../../Screens/view_history_screen.dart';

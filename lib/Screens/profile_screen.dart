@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/security_service.dart';
 import '../features/home/presentation/home_screen.dart';
 import 'progress_screen.dart';
-import 'reminder_screen.dart';
+import '../features/reminders/presentation/reminder_screen.dart';
 import '../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
 
 import 'faqs_screen.dart'; // Import for FAQsScreen

@@ -5,7 +5,7 @@ import 'package:flutter_application_1/features/eye_scan/presentation/full_report
 import 'package:flutter_application_1/features/home/presentation/home_screen.dart';
 import 'package:flutter_application_1/Screens/profile_screen.dart';
 import 'package:flutter_application_1/Screens/progress_screen.dart';
-import 'package:flutter_application_1/Screens/reminder_screen.dart';
+import 'package:flutter_application_1/features/reminders/presentation/reminder_screen.dart';
 import 'package:flutter_application_1/features/symptom_assessment/presentation/symptom_assessment_screen.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
 

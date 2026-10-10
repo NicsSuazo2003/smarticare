@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'data/models/reminder_model.dart';
+import '../data/models/reminder_model.dart';
 import 'package:hive/hive.dart';
 
 class ReminderSyncService {

@@ -7,12 +7,12 @@ import 'package:flutter_application_1/data/models/reminder_model.dart';
 
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../features/home/presentation/home_screen.dart';
+import '../../home/presentation/home_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'progress_screen.dart';
-import 'profile_screen.dart';
+import '../../../Screens/progress_screen.dart';
+import '../../../Screens/profile_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
-import '../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
+import '../../symptom_assessment/presentation/symptom_assessment_screen.dart';
 
 class ReminderScreen extends StatefulWidget {
   const ReminderScreen({super.key});
