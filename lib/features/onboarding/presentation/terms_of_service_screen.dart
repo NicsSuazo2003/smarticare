@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
-import 'progress_screen.dart';
-import 'reminder_screen.dart';
-import 'profile_screen.dart';
-import 'symptom_assessment_screen.dart';
+import '../../../Screens/home_screen.dart';
+import '../../../Screens/progress_screen.dart';
+import '../../../Screens/reminder_screen.dart';
+import '../../../Screens/profile_screen.dart';
+import '../../../Screens/symptom_assessment_screen.dart';
 
-class PrivacyPolicyScreen extends StatefulWidget {
-  const PrivacyPolicyScreen({super.key});
+class TermsOfServiceScreen extends StatefulWidget {
+  const TermsOfServiceScreen({super.key});
 
   @override
-  State<PrivacyPolicyScreen> createState() => _PrivacyPolicyScreenState();
+  State<TermsOfServiceScreen> createState() => _TermsOfServiceScreenState();
 }
 
-class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
-  int _selectedNavIndex =
-      4; // Default to profile since this is accessed from profile
+class _TermsOfServiceScreenState extends State<TermsOfServiceScreen> {
+  int _selectedNavIndex = 4;
 
   void _onNavItemTapped(int index) {
     if (_selectedNavIndex == index) {
@@ -24,21 +23,21 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
       _selectedNavIndex = index;
     });
     switch (index) {
-      case 0: // Home
+      case 0:
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const HomeScreen()),
           (route) => false,
         );
         break;
-      case 1: // Progress
+      case 1:
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const ProgressScreen()),
           (route) => false,
         );
         break;
-      case 2: // Eye Scan
+      case 2:
         Navigator.push(
           context,
           MaterialPageRoute(
@@ -50,14 +49,14 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
           ),
         );
         break;
-      case 3: // Reminders
+      case 3:
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const ReminderScreen()),
           (route) => false,
         );
         break;
-      case 4: // Profile
+      case 4:
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const ProfileScreen()),
@@ -81,7 +80,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Privacy Policy',
+          'Terms of Service',
           style: TextStyle(
             color: Colors.black,
             fontWeight: FontWeight.bold,
@@ -91,23 +90,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
       body: Column(
         children: [
           // Date and User info
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 20.0, vertical: 8.0),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(5),
-              ),
-            ),
-          ),
 
-          // Privacy Policy Content
-          // Replace the entire privacy policy content section with this:
-
-// Privacy Policy Content
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
@@ -115,7 +98,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Privacy Policy',
+                    'Terms of Service',
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -131,9 +114,9 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Introduction
+                  // 1. Acceptance of Terms
                   const Text(
-                    'Introduction',
+                    '1. Acceptance of Terms',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -141,7 +124,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'SmartiCare respects the privacy of its users and is committed to protecting personal information. This Privacy Policy explains how the app collects, uses, and safeguards the data provided by users.',
+                    'By using SmartiCare, users agree to comply with these terms. If a user disagrees, they should stop using the app.',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -149,9 +132,9 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Information We Collect
+                  // 2. Purpose of the Application
                   const Text(
-                    '1. Information We Collect',
+                    '2. Purpose of the Application',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -159,66 +142,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'SmartiCare may collect the following information:',
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _buildBulletItem(
-                      'Personal details such as email address for account registration and verification.'),
-                  _buildBulletItem(
-                      'Assessment results from symptom-based questionnaires and eye image analysis.'),
-                  _buildBulletItem(
-                      'System-generated data such as timestamps and usage records stored securely in Firebase.'),
-                  const SizedBox(height: 20),
-
-                  // Purpose of Data Collection
-                  const Text(
-                    '2. Purpose of Data Collection',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'The information gathered is used to:',
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _buildBulletItem(
-                      'Generate pre-screening results and monitor cataract progression.'),
-                  _buildBulletItem(
-                      'Improve the accuracy and performance of the system.'),
-                  _buildBulletItem(
-                      'Provide Barangay Health administrators with summary reports for health monitoring purposes.'),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'SmartiCare does not provide a medical diagnosis. All outputs are for pre-screening and awareness only. Users are encouraged to consult an eye specialist for proper evaluation.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Data Storage and Protection
-                  const Text(
-                    '3. Data Storage and Protection',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'All collected data are securely stored in Firebase, with encryption and restricted access to authorized personnel only. No data will be shared with third parties without user consent. Offline data stored on the device is automatically synchronized once an internet connection is available.',
+                    'SmartiCare is a cataract pre-screening tool developed for public health awareness and early detection support. It is not intended to replace medical consultations or professional diagnosis.',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -226,9 +150,9 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // User Rights
+                  // 3. User Responsibilities
                   const Text(
-                    '4. User Rights',
+                    '3. User Responsibilities',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -236,7 +160,7 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'Users have the right to:',
+                    'Users must:',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -244,52 +168,16 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   _buildBulletItem(
-                      'Access their personal data and assessment history.'),
-                  _buildBulletItem('Users can delete their account.'),
+                      'Use the app only for personal or educational purposes.'),
                   _buildBulletItem(
-                      'Refuse data collection by uninstalling the app.'),
-                  const SizedBox(height: 20),
-                  const SizedBox(height: 20),
-
-// Data Management and Viewing
-                  const Text(
-                    '5. Data Management and Viewing',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'SmartiCare provides the following data management capabilities:',
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
+                      'Understand that results generated are estimates and should not be treated as final medical assessments.'),
                   _buildBulletItem(
-                      'Storing:  All scan results and assessments are automatically stored in your account for tracking and monitoring purposes.'),
-                  _buildBulletItem(
-                      'Viewing: You can view your complete scan history and assessment results at any time through the Progress and History sections of the app.'),
-                  _buildBulletItem(
-                      'Deleting: Users may delete their account, which will remove all associated personal data from our systems.'),
-                  _buildBulletItem(
-                      'Offline Access: When offline, data is stored locally on your device and will sync automatically when an internet connection is restored.'),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Please note that once data is deleted through account deactivation, it cannot be recovered.  We recommend downloading your reports before deactivating your account if you wish to retain personal records.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.6,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
+                      'Consult a certified eye specialist for confirmation of results.'),
                   const SizedBox(height: 20),
 
-                  // Policy Updates
+                  // 4. Limitation of Liability
                   const Text(
-                    '6. Policy Updates',
+                    '4. Limitation of Liability',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -297,7 +185,50 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   ),
                   const SizedBox(height: 10),
                   const Text(
-                    'This Privacy Policy may be updated as the system improves. Any major changes will be communicated within the app.',
+                    'The developers and partner barangay health units are not responsible for:',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildBulletItem(
+                      'Misinterpretation of pre-screening results.'),
+                  _buildBulletItem(
+                      'Consequences arising from failure to seek professional care.'),
+                  _buildBulletItem(
+                      'Technical issues beyond their control (e.g., internet outages, device errors).'),
+                  const SizedBox(height: 20),
+
+                  // 5. Data Accuracy and Availability
+                  const Text(
+                    '5. Data Accuracy and Availability',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'SmartiCare\'s results depend on the quality of the captured image and device performance. Accuracy may vary depending on camera quality, lighting conditions, and device specifications.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // 6. Contact Information
+                  const Text(
+                    '6. Contact Information',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'For questions or concerns about this policy, users may contact: smarticare25@gmail.com',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,

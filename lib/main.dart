@@ -15,7 +15,7 @@ import 'features/symptom_assessment/providers/symptom_assessment_provider.dart';
 import 'features/auth/providers/user_session_provider.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'screens/welcome_screen.dart';
+import 'features/onboarding/presentation/welcome_screen.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:timezone/data/latest.dart' as tz;

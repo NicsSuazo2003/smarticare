@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'early_detection_screen.dart';
+import '../../../Screens/early_detection_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   final VoidCallback onSkip;
