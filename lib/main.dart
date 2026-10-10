@@ -9,7 +9,7 @@ import 'firebase_options.dart';
 import 'features/auth/presentation/login.dart';
 import 'features/auth/presentation/register_screen.dart';
 import 'screens/personal_screen.dart';
-import 'screens/home_screen.dart';
+import 'features/home/presentation/home_screen.dart';
 import 'package:provider/provider.dart';
 import 'features/symptom_assessment/providers/symptom_assessment_provider.dart';
 import 'features/auth/providers/user_session_provider.dart';

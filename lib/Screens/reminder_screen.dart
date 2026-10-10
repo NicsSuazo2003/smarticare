@@ -7,7 +7,7 @@ import 'package:flutter_application_1/data/models/reminder_model.dart';
 
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'home_screen.dart';
+import '../features/home/presentation/home_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'progress_screen.dart';
 import 'profile_screen.dart';

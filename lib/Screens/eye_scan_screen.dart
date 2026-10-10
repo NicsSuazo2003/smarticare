@@ -14,7 +14,7 @@ import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../services/offline_sync_service.dart';
 import 'scan_result_screen.dart';
-import 'home_screen.dart';
+import '../features/home/presentation/home_screen.dart';
 import 'progress_screen.dart';
 import 'reminder_screen.dart';
 import 'profile_screen.dart';

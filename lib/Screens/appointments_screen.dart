@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
-import 'home_screen.dart';
+import '../features/home/presentation/home_screen.dart';
 import 'progress_screen.dart';
 import 'reminder_screen.dart';
 import 'profile_screen.dart';

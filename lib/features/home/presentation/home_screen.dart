@@ -10,17 +10,17 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'package:flutter_application_1/services/ml/staging_service.dart';
-import 'symptom_assessment_screen.dart';
-import 'find_clinics_screen.dart';
-import 'appointments_screen.dart';
-import 'progress_screen.dart';
-import 'reminder_screen.dart';
-import 'profile_screen.dart';
-import 'activity_log_screen.dart';
-import 'view_history_screen.dart';
+import '../../../Screens/symptom_assessment_screen.dart';
+import '../../../Screens/find_clinics_screen.dart';
+import '../../../Screens/appointments_screen.dart';
+import '../../../Screens/progress_screen.dart';
+import '../../../Screens/reminder_screen.dart';
+import '../../../Screens/profile_screen.dart';
+import '../../../Screens/activity_log_screen.dart';
+import '../../../Screens/view_history_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shimmer/shimmer.dart';
-import 'full_report_screen.dart';
+import '../../../Screens/full_report_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool refreshData;

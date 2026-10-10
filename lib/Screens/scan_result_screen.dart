@@ -14,7 +14,7 @@ import 'full_report_screen.dart';
 import 'view_history_screen.dart';
 import 'reminder_screen.dart';
 import 'profile_screen.dart';
-import 'home_screen.dart';
+import '../features/home/presentation/home_screen.dart';
 import 'progress_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';

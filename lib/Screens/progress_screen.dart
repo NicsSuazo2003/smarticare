@@ -7,7 +7,7 @@ import 'package:flutter_application_1/services/ml/staging_service.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'home_screen.dart';
+import '../features/home/presentation/home_screen.dart';
 import 'reminder_screen.dart';
 import 'profile_screen.dart';
 import 'symptom_assessment_screen.dart';

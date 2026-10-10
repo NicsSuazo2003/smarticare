@@ -5,7 +5,7 @@ import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/security_service.dart';
-import 'home_screen.dart';
+import '../features/home/presentation/home_screen.dart';
 import 'progress_screen.dart';
 import 'reminder_screen.dart';
 import 'symptom_assessment_screen.dart';

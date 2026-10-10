@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_1/Screens/full_report_screen.dart';
-import 'package:flutter_application_1/Screens/home_screen.dart';
+import 'package:flutter_application_1/features/home/presentation/home_screen.dart';
 import 'package:flutter_application_1/Screens/profile_screen.dart';
 import 'package:flutter_application_1/Screens/progress_screen.dart';
 import 'package:flutter_application_1/Screens/reminder_screen.dart';
