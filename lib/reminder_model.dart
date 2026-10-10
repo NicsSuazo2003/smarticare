@@ -37,6 +37,9 @@ class Reminder extends HiveObject {
   @HiveField(10)
   DateTime lastUpdated;
 
+  @HiveField(11) // Use the next available index
+  int notifyBefore; // Store minutes (e.g., 0, 15, 30, 60)
+
   Reminder({
     required this.id,
     required this.userId,
@@ -48,6 +51,7 @@ class Reminder extends HiveObject {
     this.repeat = "None",
     this.notification = true,
     this.needsSync = false,
+    this.notifyBefore = 0,
     required this.lastUpdated,
   });
 
@@ -63,6 +67,7 @@ class Reminder extends HiveObject {
         "repeat": repeat,
         "notification": notification,
         "lastUpdated": lastUpdated,
+        "notifyBefore": notifyBefore,
       };
 
   // ✅ Create from Firestore document
@@ -82,6 +87,7 @@ class Reminder extends HiveObject {
         lastUpdated: json['lastUpdated'] is DateTime
             ? json['lastUpdated']
             : DateTime.parse(json['lastUpdated']),
+        notifyBefore: json['notifyBefore'] ?? 0,
       );
 
   // ✅ Create a copy with updated fields
@@ -97,6 +103,7 @@ class Reminder extends HiveObject {
     bool? notification,
     bool? needsSync,
     DateTime? lastUpdated,
+    int? notifyBefore,
   }) {
     return Reminder(
       id: id ?? this.id,
@@ -110,6 +117,7 @@ class Reminder extends HiveObject {
       notification: notification ?? this.notification,
       needsSync: needsSync ?? this.needsSync,
       lastUpdated: lastUpdated ?? this.lastUpdated,
+      notifyBefore: notifyBefore ?? this.notifyBefore,
     );
   }
 }

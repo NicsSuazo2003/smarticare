@@ -55,62 +55,6 @@ class _LoginScreenState extends State<LoginScreen> {
     ));
   }
 
-  // Add this function to check and reactivate user status
-  Future<bool> _checkAndReactivateUser(String userId) async {
-    try {
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .get();
-
-      if (userDoc.exists) {
-        Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
-        String status = userData['status'] ?? 'active';
-
-        if (status == 'inactive') {
-          // Reactivate the account
-          await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .update({
-            'status': 'active',
-            'reactivatedAt': FieldValue.serverTimestamp(),
-          });
-
-          // Log the reactivation
-          await AuditLogService.logAction(
-            action: 'account_reactivated',
-            details: 'User reactivated their account by logging in.',
-          );
-
-          // Notify admin
-          await FirebaseFirestore.instance
-              .collection('admin_notifications')
-              .add({
-            'type': 'account_reactivated',
-            'message':
-                'User ${userData["firstName"]} ${userData["lastName"]} reactivated their account.',
-            'createdAt': FieldValue.serverTimestamp(),
-            'read': false,
-            'relatedUserId': userId,
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Welcome back! Your account has been reactivated.'),
-              backgroundColor: Colors.green,
-            ),
-          );
-          return true;
-        }
-      }
-      return false;
-    } catch (e) {
-      print('Error checking user status: $e');
-      return false;
-    }
-  }
-
   // Update the _login() method in login.dart
   // Find the _login() method and update after successful authentication:
 
@@ -479,7 +423,6 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       LatestScanCache.clearCache();
-      await _checkAndReactivateUser(userCredential.user!.uid);
 
       await AuditLogService.logAction(
         action: 'login',
@@ -813,9 +756,6 @@ SmartiCare Security Team
       final userCredential =
           await FirebaseAuth.instance.signInWithCredential(credential);
 
-      // ✅ CHECK AND REACTIVATE USER STATUS
-      await _checkAndReactivateUser(userCredential.user!.uid);
-
       // After signing in, check Firestore
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
@@ -878,9 +818,6 @@ SmartiCare Security Team
         email: userCredential.user!.email!,
         action: 'successful_google_login',
       );
-
-      // ✅ CHECK AND REACTIVATE USER STATUS
-      await _checkAndReactivateUser(user.uid);
 
       // Check Firestore profile
       final doc = await FirebaseFirestore.instance

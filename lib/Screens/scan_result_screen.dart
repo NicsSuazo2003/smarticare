@@ -2,10 +2,13 @@ import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_application_1/Screens/referral_criteria_widget.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/main.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
+import 'package:flutter_application_1/services/referral_service.dart';
 import 'package:flutter_application_1/services/staging_service.dart';
+import 'package:flutter_application_1/services/treatment_recommendation_service.dart';
 import '../Screens/scoring_service.dart';
 import 'full_report_screen.dart';
 import 'view_history_screen.dart';
@@ -111,7 +114,6 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         return;
       }
 
-      // ✅ Rest of your notification code remains the same...
       final scoringService = ScoringService();
       final double computedHealthScore = scoringService.calculateHealthScore(
         imageScore: widget.confidence,
@@ -201,6 +203,85 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
     }
   }
 
+  // ✅ ADD THIS NEW METHOD
+  Future<void> _processScanAndCheckReferral() async {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    final userEmail = FirebaseAuth.instance.currentUser?.email;
+
+    if (userId == null || userEmail == null) return;
+
+    try {
+      // Get username
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      final userName =
+          '${userDoc['firstName'] ?? ''} ${userDoc['lastName'] ?? ''}'.trim();
+
+      // Calculate health score (same as display logic)
+      final scoringService = ScoringService();
+      final computedHealthScore = scoringService.calculateHealthScore(
+        imageScore: widget.confidence,
+        symptomScore: widget.symptomScore,
+        prediction: widget.prediction,
+      );
+
+      final stage = StagingService.determineStage(
+        prediction: widget.prediction,
+        symptomScore: widget.symptomScore,
+        confidence: widget.confidence,
+      );
+
+      // ✅ STEP 1: Check referral triggers
+      final checkResult = await ReferralService.checkReferralTriggers(
+        userId: userId,
+        email: userEmail,
+        userName: userName,
+        prediction: widget.prediction,
+        confidence: widget.confidence,
+        eye: widget.eye,
+        symptomScore: widget.symptomScore,
+        healthScore: computedHealthScore,
+        scanId: widget.scanId,
+      );
+
+      // ✅ STEP 2: Create referral if ANY trigger hit
+      if (checkResult.shouldRefer) {
+        final referralId = await ReferralService.createReferral(
+          userId: userId,
+          email: userEmail,
+          userName: userName,
+          eye: widget.eye,
+          stage: stage,
+          healthScore: computedHealthScore,
+          scanId: widget.scanId,
+          checkResult: checkResult,
+        );
+
+        print('🎯 Referral auto-created: $referralId');
+
+        // Show success message to user
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Your scan has been reviewed.  A referral has been created for clinic assignment.',
+              ),
+              backgroundColor: Colors.blue,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      } else {
+        print('ℹ️ No referral triggers met - normal monitoring mode');
+      }
+    } catch (e) {
+      print('❌ Error in referral process: $e');
+      // Don't fail the scan - log and continue
+    }
+  }
+
   Future<void> _saveScanOffline(Map<String, dynamic> scanData) async {
     await OfflineSyncService().saveScanOffline(scanData);
   }
@@ -244,6 +325,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
   void initState() {
     super.initState();
     _saveScanResultToFirestore();
+    _processScanAndCheckReferral();
     AuditLogService.logAction(
       action: 'scan_result_viewed',
       details:
@@ -593,6 +675,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                               ),
                               child: Column(
                                 children: [
+                                  // Header Row
                                   Container(
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 12, horizontal: 16),
@@ -608,7 +691,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                         Expanded(
                                           flex: 1,
                                           child: Text(
-                                            'Health Score',
+                                            'Analysis Details',
                                             style: TextStyle(
                                               fontWeight: FontWeight.w600,
                                               fontSize: 14,
@@ -618,43 +701,12 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                         Expanded(
                                           flex: 1,
                                           child: Text(
-                                            'Classification',
+                                            'Score',
                                             style: TextStyle(
                                               fontWeight: FontWeight.w600,
                                               fontSize: 14,
                                             ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    height: 1,
-                                    color: Colors.grey.shade200,
-                                  ),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12, horizontal: 16),
-                                    child: Row(
-                                      children: [
-                                        const Expanded(
-                                          flex: 1,
-                                          child: Text(
-                                            'Stage',
-                                            style: TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 14),
-                                          ),
-                                        ),
-                                        Expanded(
-                                          flex: 1,
-                                          child: Text(
-                                            stage,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                              color: classificationColor,
-                                            ),
+                                            textAlign: TextAlign.right,
                                           ),
                                         ),
                                       ],
@@ -662,19 +714,97 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                   ),
                                   Container(
                                       height: 1, color: Colors.grey.shade200),
+
+                                  // ✅ NEW: AI Image Analysis Row
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 12, horizontal: 16),
                                     child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
-                                        const Expanded(
+                                        Expanded(
+                                          flex: 1,
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.all(6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.blue.shade50,
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Icon(
+                                                  Icons.camera_alt,
+                                                  size: 16,
+                                                  color: Colors.blue.shade700,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              const Text(
+                                                'AI Image Analysis',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Expanded(
                                           flex: 1,
                                           child: Text(
-                                            'Computed Health Score',
+                                            '${(widget.confidence * 100).round()}%',
                                             style: TextStyle(
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.bold,
                                               fontSize: 14,
+                                              color: Colors.blue.shade700,
                                             ),
+                                            textAlign: TextAlign.right,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                      height: 1, color: Colors.grey.shade200),
+
+                                  // ✅ EXISTING: Computed Health Score Row (with icon)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12, horizontal: 16),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          flex: 1,
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.all(6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.green.shade50,
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Icon(
+                                                  Icons.favorite,
+                                                  size: 16,
+                                                  color: Colors.green.shade700,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              const Text(
+                                                'Computed Health Score',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                         Expanded(
@@ -683,18 +813,129 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                             '${computedHealthScore.round()}%',
                                             style: TextStyle(
                                               fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                              color: classificationColor,
+                                              fontSize: 14,
+                                              color: Colors.green.shade700,
                                             ),
+                                            textAlign: TextAlign.right,
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
                                   Container(
-                                    height: 1,
-                                    color: Colors.grey.shade200,
+                                      height: 1, color: Colors.grey.shade200),
+
+                                  // ✅ NEW: Symptom Assessment Score
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12, horizontal: 16),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          flex: 1,
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.all(6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.orange.shade50,
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Icon(
+                                                  Icons.assessment,
+                                                  size: 16,
+                                                  color: Colors.orange.shade700,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              const Text(
+                                                'Symptom Assessment',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Expanded(
+                                          flex: 1,
+                                          child: Text(
+                                            '${(widget.symptomScore * 100).round()}%',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                              color: Colors.orange.shade700,
+                                            ),
+                                            textAlign: TextAlign.right,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
+                                  Container(
+                                      height: 1, color: Colors.grey.shade200),
+
+                                  // Stage Row
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12, horizontal: 16),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          flex: 1,
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.all(6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.purple.shade50,
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Icon(
+                                                  Icons.info_outline,
+                                                  size: 16,
+                                                  color: Colors.purple.shade700,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              const Text(
+                                                'Stage',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Expanded(
+                                          flex: 1,
+                                          child: Text(
+                                            stage,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                              color: classificationColor,
+                                            ),
+                                            textAlign: TextAlign.right,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  // Initial Stage Row (optional - keep if needed)
+                                  Container(
+                                      height: 1, color: Colors.grey.shade200),
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 12, horizontal: 16),
@@ -720,6 +961,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                                               fontWeight: FontWeight.w600,
                                               fontSize: 14,
                                             ),
+                                            textAlign: TextAlign.right,
                                           ),
                                         ),
                                       ],
@@ -752,6 +994,8 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
+                      // Replace the _buildTipsSection and recommendations area with this:
+
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
@@ -768,38 +1012,125 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Recommendations',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Clinical Recommendations',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: (computedHealthScore >= 60)
+                                        ? Colors.green.shade100
+                                        : Colors.red.shade100,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    TreatmentRecommendationService
+                                        .getRiskLevelLabel(
+                                      computedHealthScore.round(),
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: (computedHealthScore >= 60)
+                                          ? Colors.green.shade800
+                                          : Colors.red.shade800,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 16),
-                            _buildRecommendationItem(
-                              icon: Icons.remove_red_eye_outlined,
-                              title: 'Continue Monitoring',
-                              description: isNormal
-                                  ? 'Schedule your next eye scan in 6 months to track any changes.'
-                                  : 'Schedule a follow-up scan and consult a specialist soon.',
+
+                            // Display full recommendation text
+                            Text(
+                              TreatmentRecommendationService.getRecommendation(
+                                stage: stage,
+                                healthScore: computedHealthScore.round(),
+                                symptomScore: widget.symptomScore,
+                                prediction: widget.prediction,
+                                confidence: widget.confidence,
+                              ),
+                              style: TextStyle(
+                                fontSize: 14,
+                                height: 1.6,
+                                color: Colors.grey.shade800,
+                              ),
                             ),
-                            const SizedBox(height: 12),
-                            _buildRecommendationItem(
-                              icon: Icons.wb_sunny_outlined,
-                              title: 'Wear UV Protection',
-                              description:
-                                  'Use sunglasses that block UVA and UVB rays when outdoors.',
-                            ),
-                            const SizedBox(height: 12),
-                            _buildRecommendationItem(
-                              icon: Icons.local_hospital_outlined,
-                              title: 'Regular Check-ups',
-                              description: isNormal
-                                  ? 'Visit an ophthalmologist annually for comprehensive eye exams.'
-                                  : 'Consult an ophthalmologist for further diagnosis and treatment.',
+
+                            const SizedBox(height: 20),
+
+                            // Timeline badge
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.blue.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.schedule,
+                                    color: Colors.blue.shade700,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Recommended Follow-up Timeline:  ',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          TreatmentRecommendationService
+                                              .getUrgencyTimeline(
+                                            stage: stage,
+                                            healthScore:
+                                                computedHealthScore.round(),
+                                          ),
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: (stage == 'Advanced')
+                                                ? Colors.red.shade900
+                                                : Colors.blue.shade900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
+                      ),
+                      const SizedBox(height: 16),
+
+// NEW:  Referral Criteria Card
+                      ReferralCriteriaCard(
+                        prediction: widget.prediction,
+                        healthScore: computedHealthScore,
+                        symptomScore: widget.symptomScore,
+                        confidence: widget.confidence,
+                        stage: stage,
                       ),
                       const SizedBox(height: 24),
                       Row(

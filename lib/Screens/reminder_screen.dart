@@ -76,23 +76,50 @@ class _ReminderScreenState extends State<ReminderScreen> {
     });
   }
 
-// Then update the _scheduleNotification method:
+// Inside _ReminderScreenState class in reminder_screen.dart
+
   Future<void> _scheduleNotification(Reminder reminder) async {
-    final tz.TZDateTime scheduledDate = tz.TZDateTime.from(
+    if (!reminder.notification)
+      return; // Don't schedule if notifications are off
+
+    // 1. Calculate the Trigger Time
+    final tz.TZDateTime eventDate = tz.TZDateTime.from(
       reminder.dateTime,
       tz.local,
     );
 
+    // Subtract the "notifyBefore" minutes
+    final tz.TZDateTime scheduledDate =
+        eventDate.subtract(Duration(minutes: reminder.notifyBefore));
+
+    // 2. Safety Check: If time is already past, don't crash
+    if (scheduledDate.isBefore(tz.TZDateTime.now(tz.local))) {
+      print("Skipping notification: Time is in the past");
+      return;
+    }
+
+    // 3. Custom Message based on time
+    String bodyText = reminder.description;
+    if (reminder.notifyBefore > 0) {
+      // Helper to make text pretty (e.g. "15 minutes" vs "1 hour")
+      String timeString = "${reminder.notifyBefore} minutes";
+      if (reminder.notifyBefore == 60) timeString = "1 hour";
+      if (reminder.notifyBefore == 1440) timeString = "1 day";
+
+      bodyText = "Upcoming in $timeString: ${reminder.title}";
+    }
+
     await flutterLocalNotificationsPlugin.zonedSchedule(
       reminder.id.hashCode,
       reminder.title,
-      reminder.description,
+      bodyText, // Use the custom body text
       scheduledDate,
-      NotificationDetails(
+      const NotificationDetails(
         android: AndroidNotificationDetails(
           'reminder_channel',
           'Reminders',
           importance: Importance.high,
+          priority: Priority.high,
         ),
       ),
       uiLocalNotificationDateInterpretation:
@@ -129,6 +156,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
         "completed": data["completed"] ?? false,
         "repeat": data["repeat"] ?? "",
         "notification": data["notification"] ?? false,
+        "notifyBefore": data["notifyBefore"] ?? 0,
       };
     }).toList();
 
@@ -145,7 +173,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
         return AlertDialog(
           title: const Text("Delete Reminder"),
           content: const Text(
-              "Are you sure you want to delete this reminder? This action cannot be undone."),
+              "Are you sure you want to delete this reminder?  This action cannot be undone."),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -194,6 +222,118 @@ class _ReminderScreenState extends State<ReminderScreen> {
     );
   }
 
+  void _openEditReminderDialog(Map<String, dynamic> reminder, int index) async {
+    final connectivityProvider =
+        Provider.of<ConnectivityProvider>(context, listen: false);
+    final isOnline = connectivityProvider.isOnline;
+
+    if (!isOnline) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.wifi_off, color: Colors.red),
+              SizedBox(width: 10),
+              Text('No Internet Connection'),
+            ],
+          ),
+          content: const Text(
+            'Editing reminders requires an internet connection.  Please check your connection and try again.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final editedReminder = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => _EditReminderDialog(reminder: reminder),
+    );
+
+    if (editedReminder != null) {
+      final id = reminder["id"];
+
+      try {
+        // Update Firestore
+        await FirebaseFirestore.instance
+            .collection('reminders')
+            .doc(id)
+            .update({
+          "type": editedReminder["type"],
+          "title": editedReminder["title"],
+          "description": editedReminder["description"],
+          "dateTime": editedReminder["dateTime"],
+          "repeat": editedReminder["repeat"],
+          "notification": editedReminder["notification"],
+          "notifyBefore": editedReminder["notifyBefore"],
+        });
+
+        // Create user notification
+        final userId = FirebaseAuth.instance.currentUser?.uid ?? "";
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('notifications')
+            .add({
+          "type": "reminder",
+          "title": "Reminder Updated",
+          "message": "You updated the reminder:  '${editedReminder["title"]}'.",
+          "timestamp": FieldValue.serverTimestamp(),
+          "isRead": false,
+        });
+
+        // Create admin notification
+        await FirebaseFirestore.instance.collection('admin_notifications').add({
+          'type': 'reminder_updated',
+          'message':
+              'Reminder titled "${editedReminder["title"]}" was updated by user.',
+          'createdAt': FieldValue.serverTimestamp(),
+          'timestamp': FieldValue.serverTimestamp(),
+          'read': false,
+          'relatedUserId': userId,
+          'reminderId': id,
+        });
+
+        // Log to audit
+        await AuditLogService.logAction(
+          action: 'reminder_updated',
+          details:
+              'Reminder with id "$id" updated.  New title: "${editedReminder["title"]}".',
+        );
+
+        _fetchNotifications();
+        _fetchReminders();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reminder updated successfully! '),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update reminder: $e'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _openEditReminderDialog(reminder, index),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   void _showReminderDetailsDialog(Map<String, dynamic> reminder, int index) {
     const Color primaryColor = Color(0xFFFF6B6B);
     final DateTime dt = reminder["dateTime"] as DateTime;
@@ -204,202 +344,221 @@ class _ReminderScreenState extends State<ReminderScreen> {
         return Dialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-          insetPadding: const EdgeInsets.all(24),
+          insetPadding: const EdgeInsets.all(16),
           backgroundColor: Colors.white,
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header with icon and title
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
+          child: SingleChildScrollView(
+            // Added SingleChildScrollView
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header with icon and title
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: primaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          reminder["type"] == "Medication"
+                              ? Icons.medication
+                              : Icons.remove_red_eye,
+                          color: primaryColor,
+                        ),
                       ),
-                      child: Icon(
-                        reminder["type"] == "Medication"
-                            ? Icons.medication
-                            : Icons.remove_red_eye,
-                        color: primaryColor,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            reminder["title"],
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              reminder["title"],
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          Text(
-                            reminder["type"],
-                            style: TextStyle(
-                              color: Colors.grey.shade700,
-                              fontSize: 14,
+                            Text(
+                              reminder["type"],
+                              style: TextStyle(
+                                color: Colors.grey.shade700,
+                                fontSize: 14,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-                const Divider(height: 30),
-                if (reminder["type"] == "Appointment") ...[
-                  _buildDetailItem(
-                      "Patient Name", reminder["patientName"] ?? ""),
-                  _buildDetailItem("Clinic Name", reminder["clinicName"] ?? ""),
-                  _buildDetailItem("Date", reminder["date"] ?? ""),
-                  _buildDetailItem("Time", reminder["time"] ?? ""),
-                  _buildDetailItem("Status", reminder["status"] ?? ""),
-                  _buildDetailItem("Notes", reminder["notes"] ?? ""),
-                ],
-
-                // Reminder details
-                if (reminder["description"] != null &&
-                    reminder["description"].toString().isNotEmpty)
-                  _buildDetailItem(
-                      "Description", reminder["description"].toString()),
-
-                _buildDetailItem("Date & Time",
-                    "${DateFormat.yMMMMd().format(dt)} at ${DateFormat.jm().format(dt)}"),
-
-                _buildDetailItem("Repeat", reminder["repeat"]),
-
-                _buildDetailItem(
-                    "Notification", reminder["notification"] ? "On" : "Off"),
-
-                _buildDetailItem(
-                    "Status", reminder["completed"] ? "Completed" : "Pending",
-                    valueColor:
-                        reminder["completed"] ? Colors.green : Colors.orange),
-
-                const SizedBox(height: 20),
-
-                // Actions
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Delete button
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        _confirmDeleteReminder(index);
-                      },
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text("Delete"),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Colors.red),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
-                      ),
-                    ),
-
-                    // Mark as complete/incomplete button
-                    ElevatedButton.icon(
-                      onPressed: () async {
-                        final id = _reminders[index]["id"];
-                        final newStatus = !_reminders[index]["completed"];
-                        await FirebaseFirestore.instance
-                            .collection('reminders')
-                            .doc(id)
-                            .update({
-                          "completed": newStatus,
-                        });
-                        // ---> Paste notification write here
-                        final userId =
-                            FirebaseAuth.instance.currentUser?.uid ?? "";
-                        await FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(userId)
-                            .collection('notifications')
-                            .add({
-                          "type": "reminder",
-                          "title": newStatus
-                              ? "Reminder Completed"
-                              : "Reminder Updated",
-                          "message": newStatus
-                              ? "You marked '${reminder["title"]}' as completed. Great job!"
-                              : "You updated the status of '${reminder["title"]}'.",
-                          "timestamp": FieldValue.serverTimestamp(),
-                          "isRead": false,
-                        });
-                        _fetchNotifications();
-                        await AuditLogService.logAction(
-                          action: newStatus
-                              ? 'reminder_completed'
-                              : 'reminder_marked_incomplete',
-                          details:
-                              'Reminder with id "$id" marked as ${newStatus ? "completed" : "incomplete"}.',
-                        );
-                        if (newStatus) {
-                          await FirebaseFirestore.instance
-                              .collection('admin_notifications')
-                              .add({
-                            'type': 'reminder_completed',
-                            'message':
-                                'Reminder titled "${reminder["title"]}" marked as completed by user.',
-                            'createdAt': FieldValue.serverTimestamp(),
-                            'timestamp': FieldValue
-                                .serverTimestamp(), // add this for future use
-
-                            'read': false,
-                            'relatedUserId':
-                                FirebaseAuth.instance.currentUser?.uid ?? "",
-                            'reminderId': reminder["id"],
-                          });
-                        }
-                        _fetchReminders();
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                                "Reminder marked as ${newStatus ? "completed" : "incomplete"}"),
-                            backgroundColor:
-                                newStatus ? Colors.green : Colors.orange,
-                          ),
-                        );
-                      },
-                      icon: Icon(reminder["completed"]
-                          ? Icons.check_box_outlined
-                          : Icons.check_box_outline_blank),
-                      label: Text(reminder["completed"]
-                          ? "Mark as Incomplete"
-                          : "Mark as Complete"),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: reminder["completed"]
-                            ? Colors.green.shade100
-                            : primaryColor,
-                        foregroundColor: reminder["completed"]
-                            ? Colors.green.shade800
-                            : Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 10),
-
-                // Close button
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("Close"),
+                    ],
                   ),
-                ),
-              ],
+                  const Divider(height: 30),
+                  if (reminder["type"] == "Appointment") ...[
+                    _buildDetailItem(
+                        "Patient Name", reminder["patientName"] ?? ""),
+                    _buildDetailItem(
+                        "Clinic Name", reminder["clinicName"] ?? ""),
+                    _buildDetailItem("Date", reminder["date"] ?? ""),
+                    _buildDetailItem("Time", reminder["time"] ?? ""),
+                    _buildDetailItem("Status", reminder["status"] ?? ""),
+                    _buildDetailItem("Notes", reminder["notes"] ?? ""),
+                  ],
+
+                  // Reminder details
+                  if (reminder["description"] != null &&
+                      reminder["description"].toString().isNotEmpty)
+                    _buildDetailItem(
+                        "Description", reminder["description"].toString()),
+
+                  _buildDetailItem("Date & Time",
+                      "${DateFormat.yMMMMd().format(dt)} at ${DateFormat.jm().format(dt)}"),
+
+                  _buildDetailItem("Repeat", reminder["repeat"]),
+
+                  _buildDetailItem(
+                      "Notification", reminder["notification"] ? "On" : "Off"),
+
+                  _buildDetailItem(
+                      "Status", reminder["completed"] ? "Completed" : "Pending",
+                      valueColor:
+                          reminder["completed"] ? Colors.green : Colors.orange),
+
+                  const SizedBox(height: 20),
+
+                  // Actions - FIXED: Using Wrap for better responsive layout
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      // Delete button
+                      OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _confirmDeleteReminder(index);
+                        },
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text("Delete"),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          side: const BorderSide(color: Colors.red),
+                        ),
+                      ),
+
+                      // Edit button
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _openEditReminderDialog(reminder, index);
+                        },
+                        icon: const Icon(Icons.edit),
+                        label: const Text("Edit"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4A90E2),
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+
+                      // Mark as complete/incomplete button
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final id = _reminders[index]["id"];
+                          final newStatus = !_reminders[index]["completed"];
+                          await FirebaseFirestore.instance
+                              .collection('reminders')
+                              .doc(id)
+                              .update({
+                            "completed": newStatus,
+                          });
+
+                          final userId =
+                              FirebaseAuth.instance.currentUser?.uid ?? "";
+                          await FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(userId)
+                              .collection('notifications')
+                              .add({
+                            "type": "reminder",
+                            "title": newStatus
+                                ? "Reminder Completed"
+                                : "Reminder Updated",
+                            "message": newStatus
+                                ? "You marked '${reminder["title"]}' as completed.  Great job!"
+                                : "You updated the status of '${reminder["title"]}'.",
+                            "timestamp": FieldValue.serverTimestamp(),
+                            "isRead": false,
+                          });
+
+                          _fetchNotifications();
+                          await AuditLogService.logAction(
+                            action: newStatus
+                                ? 'reminder_completed'
+                                : 'reminder_marked_incomplete',
+                            details:
+                                'Reminder with id "$id" marked as ${newStatus ? "completed" : "incomplete"}.',
+                          );
+
+                          if (newStatus) {
+                            await FirebaseFirestore.instance
+                                .collection('admin_notifications')
+                                .add({
+                              'type': 'reminder_completed',
+                              'message':
+                                  'Reminder titled "${reminder["title"]}" marked as completed by user.',
+                              'createdAt': FieldValue.serverTimestamp(),
+                              'timestamp': FieldValue.serverTimestamp(),
+                              'read': false,
+                              'relatedUserId':
+                                  FirebaseAuth.instance.currentUser?.uid ?? "",
+                              'reminderId': reminder["id"],
+                            });
+                          }
+
+                          _fetchReminders();
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  "Reminder marked as ${newStatus ? "completed" : "incomplete"}"),
+                              backgroundColor:
+                                  newStatus ? Colors.green : Colors.orange,
+                            ),
+                          );
+                        },
+                        icon: Icon(reminder["completed"]
+                            ? Icons.check_box_outlined
+                            : Icons.check_box_outline_blank),
+                        label: Text(reminder["completed"]
+                            ? "Mark as Incomplete"
+                            : "Mark as Complete"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: reminder["completed"]
+                              ? Colors.green.shade100
+                              : primaryColor,
+                          foregroundColor: reminder["completed"]
+                              ? Colors.green.shade800
+                              : Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  // Close button
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Close"),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -410,24 +569,25 @@ class _ReminderScreenState extends State<ReminderScreen> {
   Widget _buildDetailItem(String label, String value, {Color? valueColor}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "$label: ",
+            "$label:",
             style: const TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 15,
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 15,
-                color: valueColor,
-              ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 15,
+              color: valueColor ?? Colors.black,
             ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -504,7 +664,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
   }
 
   void _openNewReminderDialog() async {
-    // ✅ REPLACED: Use ConnectivityProvider instead of ConnectivityService
+    // ✅ REPLACED:  Use ConnectivityProvider instead of ConnectivityService
     final connectivityProvider =
         Provider.of<ConnectivityProvider>(context, listen: false);
     final isOnline = connectivityProvider.isOnline;
@@ -558,6 +718,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
           "completed": false,
           "repeat": newReminder["repeat"],
           "notification": newReminder["notification"],
+          "notifyBefore": newReminder["notifyBefore"],
           "_isPending": true, // ✅ Mark as pending
         });
       });
@@ -588,7 +749,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
             .add({
           "type": "reminder",
           "title": "Reminder Created",
-          "message": "You created a reminder: '${newReminder["title"]}'.",
+          "message": "You created a reminder:  '${newReminder["title"]}'.",
           "timestamp": FieldValue.serverTimestamp(),
           "isRead": false,
         });
@@ -874,7 +1035,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
                                       element["title"] == r["title"] &&
                                       element["dateTime"] == r["dateTime"]);
 
-                              // In the ListView.builder for reminders, update the ListTile:
+                              // In the ListView. builder for reminders, update the ListTile:
                               return Card(
                                 margin: const EdgeInsets.only(bottom: 16),
                                 shape: RoundedRectangleBorder(
@@ -1034,10 +1195,14 @@ class _ReminderScreenState extends State<ReminderScreen> {
       backgroundColor: Colors.white,
       selectedItemColor: primaryColor,
       unselectedItemColor: Colors.grey.shade600,
-      selectedLabelStyle:
-          const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-      unselectedLabelStyle:
-          const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+      selectedLabelStyle: const TextStyle(
+        fontWeight: FontWeight.w600,
+        fontSize: 10, // Reduced from 12
+      ),
+      unselectedLabelStyle: const TextStyle(
+        fontWeight: FontWeight.normal,
+        fontSize: 10, // Reduced from 12
+      ),
       elevation: 12,
       items: [
         const BottomNavigationBarItem(
@@ -1052,8 +1217,8 @@ class _ReminderScreenState extends State<ReminderScreen> {
         ),
         BottomNavigationBarItem(
           icon: Container(
-            height: 40,
-            width: 40,
+            height: 35, // Reduced from 40
+            width: 35, // Reduced from 40
             decoration: BoxDecoration(
               color: primaryColor,
               shape: BoxShape.circle,
@@ -1061,6 +1226,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
             child: const Icon(
               Icons.camera_alt,
               color: Colors.white,
+              size: 20, // Reduced size
             ),
           ),
           label: 'Eye Scan',
@@ -1096,6 +1262,16 @@ class _NewReminderDialogState extends State<_NewReminderDialog> {
   String _repeat = "None";
   bool _notification = true;
   bool _isLoading = false;
+
+  int _notifyBefore = 0; // Default 0
+  final Map<int, String> _notifyOptions = {
+    0: "At time of event",
+    5: "5 minutes before",
+    15: "15 minutes before",
+    30: "30 minutes before",
+    60: "1 hour before",
+    1440: "1 day before",
+  };
 
   final List<String> repeatOptions = ["None", "Daily", "Weekly", "Monthly"];
 
@@ -1147,11 +1323,12 @@ class _NewReminderDialogState extends State<_NewReminderDialog> {
         "completed": false,
         "repeat": _repeat,
         "notification": _notification,
+        "notifyBefore": _notifyBefore,
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Failed to create reminder. Please try again.'),
+          content: Text('Failed to create reminder.  Please try again.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -1291,6 +1468,23 @@ class _NewReminderDialogState extends State<_NewReminderDialog> {
                 color: _notification ? Colors.green : Colors.grey,
               ),
             ),
+            const SizedBox(height: 14),
+            DropdownButtonFormField<int>(
+              value: _notifyBefore,
+              items: _notifyOptions.entries.map((e) {
+                return DropdownMenuItem<int>(
+                  value: e.key,
+                  child: Text(e.value),
+                );
+              }).toList(),
+              onChanged: (v) => setState(() => _notifyBefore = v ?? 0),
+              decoration: const InputDecoration(
+                labelText: "Notify me",
+                prefixIcon: Icon(Icons.alarm),
+                border: OutlineInputBorder(),
+              ),
+            ),
+
             const SizedBox(height: 18),
             Row(
               children: [
@@ -1359,6 +1553,351 @@ class _NewReminderDialogState extends State<_NewReminderDialog> {
             ),
             const SizedBox(width: 8),
             // Wrap the label in Flexible so it can ellipsize if there's not enough space.
+            Flexible(
+              child: Text(
+                value,
+                style: TextStyle(
+                  color: Colors.grey.shade800,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Radio<String>(
+              value: value,
+              groupValue: _type,
+              onChanged: (v) => setState(() => _type = v!),
+              activeColor: primaryColor,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ✅ NEW:  Edit Reminder Dialog
+class _EditReminderDialog extends StatefulWidget {
+  final Map<String, dynamic> reminder;
+
+  const _EditReminderDialog({required this.reminder});
+
+  @override
+  State<_EditReminderDialog> createState() => _EditReminderDialogState();
+}
+
+class _EditReminderDialogState extends State<_EditReminderDialog> {
+  late String _type;
+  late TextEditingController _title;
+  late TextEditingController _desc;
+  late DateTime _date;
+  late TimeOfDay _time;
+  late String _repeat;
+  late bool _notification;
+  bool _isLoading = false;
+
+  int _notifyBefore = 0;
+  final Map<int, String> _notifyOptions = {
+    0: "At time of event",
+    5: "5 minutes before",
+    15: "15 minutes before",
+    30: "30 minutes before",
+    60: "1 hour before",
+    1440: "1 day before",
+  };
+  final List<String> repeatOptions = ["None", "Daily", "Weekly", "Monthly"];
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-populate with existing reminder data
+    _type = widget.reminder["type"] ?? "Eye Scan";
+    _title = TextEditingController(text: widget.reminder["title"] ?? "");
+    _desc = TextEditingController(text: widget.reminder["description"] ?? "");
+
+    final dt = widget.reminder["dateTime"] as DateTime;
+    _date = dt;
+    _time = TimeOfDay(hour: dt.hour, minute: dt.minute);
+    _repeat = widget.reminder["repeat"] ?? "None";
+    _notification = widget.reminder["notification"] ?? true;
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _desc.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+
+  Future<void> _pickTime() async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _time,
+    );
+    if (picked != null) setState(() => _time = picked);
+  }
+
+  void _save() async {
+    if (_title.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in the title')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final DateTime finalDateTime = DateTime(
+        _date.year,
+        _date.month,
+        _date.day,
+        _time.hour,
+        _time.minute,
+      );
+
+      Navigator.pop(context, {
+        "type": _type,
+        "title": _title.text.trim(),
+        "description": _desc.text.trim(),
+        "dateTime": finalDateTime,
+        "repeat": _repeat,
+        "notification": _notification,
+        "notifyBefore": _notifyBefore,
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to update reminder. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const Color primaryColor = Color(0xFFFF6B6B);
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      insetPadding: const EdgeInsets.all(24),
+      backgroundColor: Colors.white,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "Edit Reminder",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 18),
+            // Type selection
+            Row(
+              children: [
+                Expanded(
+                  child: _buildTypeRadio("Eye Scan"),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: _buildTypeRadio("Medication"),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            // Title
+            TextField(
+              controller: _title,
+              decoration: const InputDecoration(
+                labelText: "Title",
+                prefixIcon: Icon(Icons.title),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 14),
+            // Description
+            TextField(
+              controller: _desc,
+              minLines: 1,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: "Description",
+                prefixIcon: Icon(Icons.description),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 14),
+            // Date and Time row
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _pickDate,
+                    child: AbsorbPointer(
+                      child: TextField(
+                        decoration: InputDecoration(
+                          labelText: "Date",
+                          prefixIcon: const Icon(Icons.calendar_today),
+                          border: const OutlineInputBorder(),
+                          hintText: DateFormat.yMMMEd().format(_date),
+                        ),
+                        controller: TextEditingController(
+                          text: DateFormat.yMMMEd().format(_date),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _pickTime,
+                    child: AbsorbPointer(
+                      child: TextField(
+                        decoration: InputDecoration(
+                          labelText: "Time",
+                          prefixIcon: const Icon(Icons.access_time),
+                          border: const OutlineInputBorder(),
+                          hintText: _time.format(context),
+                        ),
+                        controller: TextEditingController(
+                          text: _time.format(context),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            // Repeat
+            DropdownButtonFormField<String>(
+              value: _repeat,
+              items: repeatOptions
+                  .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                  .toList(),
+              onChanged: (v) => setState(() => _repeat = v ?? "None"),
+              decoration: const InputDecoration(
+                labelText: "Repeat",
+                prefixIcon: Icon(Icons.repeat),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 14),
+// Notification switch
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text("Notification"),
+              value: _notification,
+              onChanged: (v) => setState(() => _notification = v),
+              activeColor: primaryColor,
+              secondary: Icon(
+                _notification
+                    ? Icons.notifications_active
+                    : Icons.notifications_off,
+                color: _notification ? Colors.green : Colors.grey,
+              ),
+            ),
+            const SizedBox(height: 14),
+// Notify before dropdown - ONLY ONE, NOT DUPLICATED
+            DropdownButtonFormField<int>(
+              value: _notifyBefore,
+              items: _notifyOptions.entries.map((e) {
+                return DropdownMenuItem<int>(
+                  value: e.key,
+                  child: Text(e.value),
+                );
+              }).toList(),
+              onChanged: (v) => setState(() => _notifyBefore = v ?? 0),
+              decoration: const InputDecoration(
+                labelText: "Notify me",
+                prefixIcon: Icon(Icons.alarm),
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _isLoading ? null : () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      foregroundColor: primaryColor,
+                    ),
+                    child: const Text("Cancel"),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _isLoading ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text("Save Changes"),
+                  ),
+                ),
+              ],
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTypeRadio(String value) {
+    const Color primaryColor = Color(0xFFFF6B6B);
+    return GestureDetector(
+      onTap: () => setState(() => _type = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: _type == value
+              ? primaryColor.withOpacity(0.08)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: _type == value ? primaryColor : Colors.grey.shade300,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              value == "Eye Scan" ? Icons.remove_red_eye : Icons.medication,
+              color: primaryColor,
+              size: 22,
+            ),
+            const SizedBox(width: 8),
             Flexible(
               child: Text(
                 value,

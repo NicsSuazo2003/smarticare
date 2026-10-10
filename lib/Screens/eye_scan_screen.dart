@@ -265,7 +265,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
 
       final result = await CataractModel.predict(croppedImage);
 
-      // Calculate health score BEFORE caching
+      // Calculate health score
       final scoringService = ScoringService();
       final double computedHealthScore = scoringService.calculateHealthScore(
         imageScore: result['confidence'],
@@ -273,18 +273,18 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
         prediction: result['predictedClass'],
       );
 
-      // ✅ UPDATE CACHE IMMEDIATELY (ONCE) - persisted to Hive
+      
       print('🔵 _captureImage: _selectedEye = $_selectedEye');
       if (_selectedEye == 'Left Eye') {
         await LatestScanCache.updateLeftEye(
             result['predictedClass'], computedHealthScore);
         print(
-            '✅ Updated LEFT eye cache:  ${result['predictedClass']}, $computedHealthScore%');
+            ' Updated LEFT eye cache:  ${result['predictedClass']}, $computedHealthScore%');
       } else {
         await LatestScanCache.updateRightEye(
             result['predictedClass'], computedHealthScore);
         print(
-            '✅ Updated RIGHT eye cache: ${result['predictedClass']}, $computedHealthScore%');
+            'Updated RIGHT eye cache: ${result['predictedClass']}, $computedHealthScore%');
       }
       print(
           '🔵 Cache status - Left:  ${LatestScanCache.leftEyePrediction} (${LatestScanCache.leftEyeHealthScore}%), Right: ${LatestScanCache.rightEyePrediction} (${LatestScanCache.rightEyeHealthScore}%)');
@@ -360,14 +360,14 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                 'timestamp': DateTime.now().toUtc().toIso8601String(),
               });
               imageUrl = croppedImage.path;
-              print('✅ Scan saved offline:  $scanId');
+              print(' Scan saved offline:  $scanId');
             } catch (e) {
-              print('❌ Error saving scan offline: $e');
+              print(' Error saving scan offline: $e');
               imageUrl = croppedImage.path;
             }
           }
         } catch (e) {
-          print('❌ Failed to save scan:  $e');
+          print(' Failed to save scan:  $e');
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -557,7 +557,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
           print(
               'Prediction result: ${result['predictedClass']}, confidence: ${result['confidence']}');
 
-// NEW:  Calculate health score for gallery uploads too
+
           final scoringService = ScoringService();
           final double computedHealthScore =
               scoringService.calculateHealthScore(
@@ -566,19 +566,18 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
             prediction: result['predictedClass'],
           );
 
-//  CHANGED: Use computed health score
-          // ✅ UPDATE CACHE IMMEDIATELY - BEFORE saving online/offline
+
           print('🔵 _captureImage: _selectedEye = $_selectedEye');
           if (_selectedEye == 'Left Eye') {
             await LatestScanCache.updateLeftEye(
                 result['predictedClass'], computedHealthScore);
             print(
-                '✅ Updated LEFT eye cache:   ${result['predictedClass']}, $computedHealthScore%');
+                ' Updated LEFT eye cache:   ${result['predictedClass']}, $computedHealthScore%');
           } else {
             await LatestScanCache.updateRightEye(
                 result['predictedClass'], computedHealthScore);
             print(
-                '✅ Updated RIGHT eye cache:  ${result['predictedClass']}, $computedHealthScore%');
+                'Updated RIGHT eye cache:  ${result['predictedClass']}, $computedHealthScore%');
           }
 
           final isGuest =
@@ -600,7 +599,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
 
             if (isOnline) {
               try {
-                // ✅ FIX 1: Changed timeout from 3 seconds to 120 seconds (2 minutes)
+                
                 await _eyeScanService
                     .saveScanResult(
                       imageFile: croppedImage,
@@ -611,7 +610,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                       scanId: scanId,
                     )
                     .timeout(const Duration(
-                        seconds: 120)); // ✅ FIXED: 120s instead of 3s
+                        seconds: 120));
 
                 await AuditLogService.logAction(
                   action: 'eye_scan_performed',
@@ -619,7 +618,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                       'ScanId: $scanId, Eye: $_selectedEye, Prediction: ${result['predictedClass']}, Confidence: ${result['confidence']}',
                 ).timeout(const Duration(seconds: 10));
 
-                // ✅ FIX 2: Changed timeout from 2 seconds to 15 seconds
+             
                 final doc = await FirebaseFirestore.instance
                     .collection('users')
                     .doc(FirebaseAuth.instance.currentUser!.uid)
@@ -627,12 +626,12 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                     .doc(scanId)
                     .get()
                     .timeout(const Duration(
-                        seconds: 15)); // ✅ FIXED: 15s instead of 2s
+                        seconds: 15)); 
 
                 if (doc.exists && doc.data() != null) {
                   final savedImageUrl = doc.data()!['imageUrl'];
 
-                  // ✅ Verify it's a Storage URL
+                 
                   if (savedImageUrl != null &&
                       savedImageUrl.startsWith(
                           'https://firebasestorage.googleapis.com/')) {
@@ -689,7 +688,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
             imageUrl = croppedImage.path;
           }
 
-          // ✅ Navigate only if imageUrl is valid
+         
           if (mounted) {
             Navigator.push(
               context,
@@ -735,7 +734,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
     }
   }
 
-// This replaces the entire _cropImageToCenterSquare() method
+
   Future<File> _cropImageToCenterSquare(File imageFile) async {
     final bytes = await imageFile.readAsBytes();
     img.Image? oriImage = img.decodeImage(bytes);

@@ -129,14 +129,14 @@ class _ProgressScreenState extends State<ProgressScreen> {
               .toDouble()
               .clamp(0.0, 1.0);
 
-// Stage (classification)
+             // Stage (classification)
           final String classification = StagingService.determineStage(
             prediction: prediction,
             symptomScore: symptomScore,
             confidence: (numConfidence.toDouble()).clamp(0.0, 1.0),
           );
 
-// ✅ FIX: Use classification directly as result
+
           String result =
               classification; // Shows: "Normal", "Immature", "Mature", or "Advanced"
           String details;
@@ -180,8 +180,8 @@ class _ProgressScreenState extends State<ProgressScreen> {
             "date": date,
             "eye": eye,
             "aiConfidence":
-                (numConfidence * 100).round(), // ✅ Rename for clarity
-            "healthScore": healthScore.round(), // ✅ Add actual health score
+                (numConfidence * 100).round(), 
+            "healthScore": healthScore.round(), 
             "classification": classification,
             "result": result,
             "details": details,
@@ -228,7 +228,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
     final Color statusColor =
         classification == "Normal" ? Colors.green : Colors.amber;
 
-    // ✅ NEW: Get comparison data
+   
     final int currentIndex =
         progressData.indexWhere((s) => s["id"] == scan["id"]);
     final Map<String, dynamic>? previousScan = _getPreviousScan(currentIndex);
@@ -385,7 +385,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     ],
                   ),
 
-                  // ✅ NEW: Comparison Section
+                 
                   if (comparisonText != null && comparisonColor != null) ...[
                     const SizedBox(height: 16),
                     Container(
@@ -432,7 +432,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                       ),
                     ),
                   ] else ...[
-                    // ✅ Show "First Scan" message if no comparison
+                
                     const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.all(14),
@@ -582,7 +582,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
   }
 
   void _onNavItemTapped(int index) {
-    // ✅ Special handling for Eye Scan - always allow it to open
+   
     if (index == 2) {
       Navigator.push(
         context,
@@ -597,7 +597,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
       return;
     }
 
-    // ✅ For other tabs, check if already selected
+    
     if (_selectedNavIndex == index) {
       return;
     }
@@ -1005,17 +1005,17 @@ class _ProgressScreenState extends State<ProgressScreen> {
 
                 const SizedBox(height: 16),
 
-                // ✅ TIMELINE: Show ALL scans (complete progression view)
+                
                 if (progressData.isEmpty)
                   _buildEmptyState(primaryColor)
                 else
-                  ..._buildTimelineCards(primaryColor), // ✅ No limit!
+                  ..._buildTimelineCards(primaryColor),
 
                 const SizedBox(height: 28),
 
                 const SizedBox(height: 28),
 
-// ✅ ALL SCANS SECTION - CLEAN VERSION (NO DUPLICATES)
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -1027,7 +1027,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                         fontSize: 18,
                       ),
                     ),
-                    // ✅ Just "View All" button - no scan count
+                   
                     TextButton(
                       onPressed: () {
                         Navigator.push(
@@ -1094,7 +1094,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                     ),
                   )
                 else
-                  // ✅ Show only first 5 scans - ONE TIME ONLY
+                
                   ...progressData.take(5).map((scan) => _ProgressCard(
                         scan: scan,
                         primaryColor: primaryColor,
@@ -1143,7 +1143,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Complete your first eye scan to track your eye health over time', // ✅ Better wording
+                'Complete your first eye scan to track your eye health over time', 
                 style: TextStyle(
                   color: Colors.grey.shade500,
                   fontSize: 14,
@@ -1160,7 +1160,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
   List<Widget> _buildTimelineCards(Color primaryColor) {
     final cards = <Widget>[];
 
-    // ✅ Limit to 10 most recent scans
+    
     final int itemsToShow = progressData.length > 10 ? 10 : progressData.length;
 
     for (int i = 0; i < itemsToShow; i++) {
@@ -1234,7 +1234,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
   }
 }
 
-/// NEW WIDGET: Timeline Card replacing LineChart
+
 class _TimelineCard extends StatelessWidget {
   final Map<String, dynamic> scan;
   final Map<String, dynamic>? previousScan;
@@ -1253,7 +1253,6 @@ class _TimelineCard extends StatelessWidget {
     return Colors.red;
   }
 
-  // ✅ ADD THIS METHOD:
   String _getHealthScoreLabel(int healthScore) {
     if (healthScore >= 80) return 'Healthy';
     if (healthScore >= 60) return 'Monitor';
@@ -1458,7 +1457,7 @@ class _TimelineCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    // ✅ ADD THIS:
+                  
                     Text(
                       _getHealthScoreLabel(scan["healthScore"] ?? 0),
                       style: TextStyle(

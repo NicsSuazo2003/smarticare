@@ -70,7 +70,7 @@ class OfflineSyncService {
       hiveCompatibleAssessmentData['offline'] = true;
       hiveCompatibleAssessmentData['createdOffline'] =
           DateTime.now().toIso8601String();
-      hiveCompatibleAssessmentData['synced'] = false; // ✅ Mark as NOT synced
+      hiveCompatibleAssessmentData['synced'] = false;
 
       // Add to sync queue
       await syncQueue.put(assessmentId, {
@@ -399,7 +399,6 @@ class OfflineSyncService {
       }
     }
 
-    
     await syncQueue.delete(key);
     print('✅ Removed $key from sync queue');
   }
@@ -409,7 +408,7 @@ class OfflineSyncService {
       String userId, Box syncQueue) async {
     final onlineData = Map<String, dynamic>.from(data);
 
-    // ✅ FIX 1: Check if already synced to prevent re-sync duplicates
+    
     if (onlineData['synced'] == true) {
       print('⚠️ Assessment $key already synced, skipping');
       await syncQueue.delete(key);
@@ -426,7 +425,7 @@ class OfflineSyncService {
     onlineData['syncedAt'] = FieldValue.serverTimestamp();
     onlineData['syncedFrom'] = 'offline';
 
-    // ✅ FIX 2: Log before sync
+   
     print('🔄 Syncing assessment from offline queue: $key');
 
     try {

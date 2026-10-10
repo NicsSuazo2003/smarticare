@@ -245,14 +245,51 @@ class _PrivacyPolicyScreenState extends State<PrivacyPolicyScreen> {
                   const SizedBox(height: 10),
                   _buildBulletItem(
                       'Access their personal data and assessment history.'),
-                  _buildBulletItem('Users can deactivate thier account.'),
+                  _buildBulletItem('Users can delete their account.'),
                   _buildBulletItem(
                       'Refuse data collection by uninstalling the app.'),
+                  const SizedBox(height: 20),
+                  const SizedBox(height: 20),
+
+// Data Management and Viewing
+                  const Text(
+                    '5. Data Management and Viewing',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'SmartiCare provides the following data management capabilities:',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _buildBulletItem(
+                      'Storing:  All scan results and assessments are automatically stored in your account for tracking and monitoring purposes.'),
+                  _buildBulletItem(
+                      'Viewing: You can view your complete scan history and assessment results at any time through the Progress and History sections of the app.'),
+                  _buildBulletItem(
+                      'Deleting: Users may delete their account, which will remove all associated personal data from our systems.'),
+                  _buildBulletItem(
+                      'Offline Access: When offline, data is stored locally on your device and will sync automatically when an internet connection is restored.'),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Please note that once data is deleted through account deactivation, it cannot be recovered.  We recommend downloading your reports before deactivating your account if you wish to retain personal records.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.6,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
                   const SizedBox(height: 20),
 
                   // Policy Updates
                   const Text(
-                    '5. Policy Updates',
+                    '6. Policy Updates',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,

@@ -23,6 +23,6 @@ class StagingService {
     // Stage primarily by symptoms
     if (symptomScore < 0.3) return 'Immature';
     if (symptomScore < 0.7) return 'Mature';
-    return 'Advanced';
+    return 'Mature';
   }
 }

@@ -507,53 +507,84 @@ Widget _buildRequirement(String text, bool isMet) {
 }
 
 void _deleteAccount(BuildContext context) {
+  final User? user = FirebaseAuth.instance.currentUser;
+  final String? uid = user?.uid;
+
   showDialog(
     context: context,
-    builder: (context) {
+    builder: (dialogCtx) {
       return AlertDialog(
-        title: const Text('Delete Account'),
+        title: const Text('Delete Account Permanently'),
         content: const Text(
-            'Are you sure you want to delete your account? This action cannot be undone.'),
+            'This action is irreversible. All your scan history, assessments, and personal profile data will be permanently deleted from our servers.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogCtx),
             child: const Text('CANCEL'),
           ),
           TextButton(
             onPressed: () async {
               try {
-                await FirebaseAuth.instance.currentUser?.delete();
-                Navigator.pop(context);
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );
-                await AuditLogService.logAction(
-                  action: 'account_deleted',
-                  details: 'User deleted their account.',
-                );
-                await FirebaseFirestore.instance
-                    .collection('admin_notifications')
-                    .add({
-                  'type': 'account_deleted',
-                  'message': 'User deleted their account.',
-                  'createdAt': FieldValue.serverTimestamp(),
-                  'read': false,
-                  'relatedUserId': FirebaseAuth.instance.currentUser?.uid ?? "",
-                });
+                if (uid == null) return;
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Account deleted successfully')),
-                );
+                // 1. Wipe Firestore Data (Sub-collections + Profile)
+                final batch = FirebaseFirestore.instance.batch();
+                final userRef =
+                    FirebaseFirestore.instance.collection('users').doc(uid);
+
+                // Helper to add sub-collection docs to batch
+                Future<void> addCollectionToBatch(String collectionName) async {
+                  final snapshots =
+                      await userRef.collection(collectionName).get();
+                  for (var doc in snapshots.docs) {
+                    batch.delete(doc.reference);
+                  }
+                }
+
+                await addCollectionToBatch('scans');
+                await addCollectionToBatch('assessments');
+                await addCollectionToBatch('notifications');
+
+                // Delete the main profile document
+                batch.delete(userRef);
+
+                // 2. Commit Firestore Deletion
+                await batch.commit();
+
+                // 3. Delete Firebase Authentication Record
+                await user?.delete();
+
+                // 4. Cleanup & Redirect
+                if (context.mounted) {
+                  Navigator.pop(dialogCtx);
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => const LoginScreen()),
+                    (route) => false,
+                  );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content:
+                            Text('Account and all data permanently deleted.')),
+                  );
+                }
+              } on FirebaseAuthException catch (e) {
+                if (e.code == 'requires-recent-login') {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text(
+                            'Please logout and login again to verify your identity before deleting.')),
+                  );
+                }
               } catch (e) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to delete account: $e')),
+                  SnackBar(content: Text('Error during deletion: $e')),
                 );
               }
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('DELETE'),
+            child: const Text('DELETE EVERYTHING'),
           ),
         ],
       );
@@ -1395,10 +1426,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onTap: () => _show2FASettings(context),
           ),
           _buildSettingTile(
-            icon: Icons.pause_circle_outline,
-            title: 'Deactivate Account',
+            icon: Icons.delete_forever_outlined,
+            title: 'Delete Account',
             isDestructive: true,
-            onTap: () => _deactivateAccount(context),
+            onTap: () => _deleteAccount(context),
             isLast: true,
           ),
         ],

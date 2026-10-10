@@ -35,7 +35,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int _selectedNavIndex = 0; // Default to Home tab (index 0)
+  int _selectedNavIndex = 0;
   late String _formattedDateTime;
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
@@ -64,14 +64,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _fetchRecentScans();
     _setupConnectivityListener();
 
-    // Initialize flutter_local_notifications
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
     final InitializationSettings initializationSettings =
         InitializationSettings(android: initializationSettingsAndroid);
     flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
-    // Listen for foreground FCM messages and show a local notification
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       RemoteNotification? notification = message.notification;
       AndroidNotification? android = message.notification?.android;
@@ -94,8 +92,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
-    // If we're returning from a scan, force a refresh after a short delay
-    // to ensure Firebase has time to update
     if (widget.refreshData) {
       Future.delayed(const Duration(milliseconds: 500), () {
         _fetchEyeHealthData();
@@ -132,7 +128,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // Add this method to your class
   Future<void> _fetchRecentScans() async {
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
@@ -140,11 +135,9 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Use OfflineSyncService to get ALL scans (online + offline)
       final List<Map<String, dynamic>> allScans =
           await OfflineSyncService().getAllScans();
 
-      // Sort by timestamp (most recent first)
       allScans.sort((a, b) {
         final aTime = a['timestamp']?.toString() ?? '';
         final bTime = b['timestamp']?.toString() ?? '';
@@ -155,7 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _recentScans = allScans;
       });
 
-      print('✅ Loaded ${_recentScans.length} scans (online + offline)');
+      print('Loaded ${_recentScans.length} scans (online + offline)');
     } catch (e) {
       print('Error fetching recent scans: $e');
     }
@@ -181,37 +174,33 @@ class _HomeScreenState extends State<HomeScreen> {
       return "No Data Yet";
     }
 
-    // ✅ NEW: Check if EITHER eye has cataract
-    final bool hasCataract =
-        (leftStatus != 'Normal' && leftStatus != 'Unknown') ||
-            (rightStatus != 'Normal' && rightStatus != 'Unknown');
+    final leftNeedsAttention =
+        leftScore < 60 && leftStatus != 'Normal' && leftStatus != 'Unknown';
+    final rightNeedsAttention =
+        rightScore < 60 && rightStatus != 'Normal' && rightStatus != 'Unknown';
 
-    if (hasCataract) {
-      // If any cataract detected, never show "Healthy Eyes"
-      final overallScore = _eyeHealthData['overallScore'] as int;
-      if (overallScore >= 60) {
-        return "Monitor Health";
-      } else {
-        return "Attention Needed";
-      }
-    }
+    final leftEarlyWarning =
+        leftScore >= 60 && leftScore < 80 && leftStatus != 'Normal';
+    final rightEarlyWarning =
+        rightScore >= 60 && rightScore < 80 && rightStatus != 'Normal';
 
-    // Only show "Healthy Eyes" if BOTH are normal
-    final overallScore = _eyeHealthData['overallScore'] as int;
-    if (overallScore >= 80) {
-      return "Healthy Eyes";
-    } else if (overallScore >= 60) {
-      return "Monitor Health";
-    } else {
+    // If EITHER eye needs urgent attention
+    if (leftNeedsAttention || rightNeedsAttention) {
       return "Attention Needed";
     }
+
+    // If EITHER eye needs monitoring
+    if (leftEarlyWarning || rightEarlyWarning) {
+      return "Monitor Health";
+    }
+
+    // Both eyes are healthy
+    return "Healthy Eyes";
   }
 
   Color _getOverallHealthColor() {
     final overallScore = _eyeHealthData['overallScore'] as int;
 
-    // Always return white since text is on blue background
-    // But you can adjust opacity for different states
     if (overallScore >= 80) {
       return Colors.white;
     } else if (overallScore >= 60) {
@@ -219,38 +208,52 @@ class _HomeScreenState extends State<HomeScreen> {
     } else if (overallScore > 0) {
       return Colors.white;
     } else {
-      return Colors.white70; // Dimmed for "No Data Yet"
+      return Colors.white70;
     }
   }
 
   String _getHealthDescription() {
-    final overallScore = _eyeHealthData['overallScore'] as int;
+    final leftScore = _eyeHealthData['leftEye']['score'] as int;
+    final rightScore = _eyeHealthData['rightEye']['score'] as int;
     final leftStatus = _eyeHealthData['leftEye']['status'] as String;
     final rightStatus = _eyeHealthData['rightEye']['status'] as String;
 
-    // ✅ NEW: Check if ANY eye has cataract
-    final bool hasCataract =
-        (leftStatus != 'Normal' && leftStatus != 'Unknown') ||
-            (rightStatus != 'Normal' && rightStatus != 'Unknown');
+    // Check each eye INDIVIDUALLY (DON'T average)
+    final leftNeedsAttention =
+        leftScore < 60 && leftStatus != 'Normal' && leftStatus != 'Unknown';
+    final rightNeedsAttention =
+        rightScore < 60 && rightStatus != 'Normal' && rightStatus != 'Unknown';
 
-    if (hasCataract) {
-      if (overallScore >= 60) {
-        return "Early signs detected. Regular monitoring recommended.";
-      } else {
-        return "Cataract detected. Please consult a specialist soon.";
-      }
+    final leftEarlyWarning =
+        leftScore >= 60 && leftScore < 80 && leftStatus != 'Normal';
+    final rightEarlyWarning =
+        rightScore >= 60 && rightScore < 80 && rightStatus != 'Normal';
+
+    if (leftNeedsAttention && rightNeedsAttention) {
+      return "Both Eyes:  Cataract detected. Please consult a specialist soon.";
     }
 
-    // Both eyes are normal
-    if (overallScore >= 80) {
-      return "Both eyes are in excellent condition with no signs of cataract.";
-    } else if (overallScore >= 60) {
-      return "Eye health is good. Continue regular monitoring.";
-    } else if (overallScore > 0) {
-      return "Your overall eye health score is based on the combined analysis of both eyes.";
-    } else {
-      return "Your overall eye health score is based on the combined analysis of both eyes.";
+    if (leftNeedsAttention && !rightNeedsAttention) {
+      return "Left Eye:  Cataract detected.  Please consult a specialist soon.";
     }
+
+    if (rightNeedsAttention && !leftNeedsAttention) {
+      return "Right Eye:  Cataract detected. Please consult a specialist soon.";
+    }
+
+    if (leftEarlyWarning && rightEarlyWarning) {
+      return "Both Eyes: Early signs detected.  Regular monitoring recommended.";
+    }
+
+    if (leftEarlyWarning && !rightEarlyWarning) {
+      return "Left Eye: Early signs detected. Regular monitoring recommended.";
+    }
+
+    if (rightEarlyWarning && !leftEarlyWarning) {
+      return "Right Eye:  Early signs detected. Regular monitoring recommended. ";
+    }
+
+    return "Both eyes are in excellent condition with no signs of cataract.";
   }
 
   List<Map<String, dynamic>> _recentActivities = [];
@@ -349,7 +352,6 @@ class _HomeScreenState extends State<HomeScreen> {
               );
       }
 
-      // Simple "time" formatting (HH:mm)
       final time =
           "${ts.hour.toString().padLeft(2, '0')}:${ts.minute.toString().padLeft(2, '0')}";
 
@@ -368,8 +370,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // Add this method to generate chart spots from scan history
-  // In your HomeScreen class
   List<FlSpot> _generateScanCountSpots() {
     final leftCount = _recentScans
         .where((scan) => (scan['eye'] as String?)?.toLowerCase() == 'left eye')
@@ -416,22 +416,20 @@ class _HomeScreenState extends State<HomeScreen> {
       bool leftFetched = false;
       bool rightFetched = false;
 
-      // ✅ Check connectivity
       bool isOnline = true;
       try {
         final connectivity = Connectivity();
         final result = await connectivity.checkConnectivity();
         isOnline = result != ConnectivityResult.none;
-        print('🌐 Online:  $isOnline');
+        print(' Online:  $isOnline');
       } catch (e) {
-        print('⚠️ Connectivity check failed: $e');
+        print('Connectivity check failed: $e');
         isOnline = false;
       }
 
       if (isOnline) {
-        print('🟢 Fetching from Firestore...');
+        print('Fetching from Firestore.. .');
         try {
-          // ✅ Fetch LEFT EYE
           final leftEyeQuery = await FirebaseFirestore.instance
               .collection('users')
               .doc(userId)
@@ -442,12 +440,12 @@ class _HomeScreenState extends State<HomeScreen> {
               .get()
               .timeout(const Duration(seconds: 5));
 
-          print('🔵 Left eye query returned ${leftEyeQuery.docs.length} docs');
+          print(' Left eye query returned ${leftEyeQuery.docs.length} docs');
 
           if (leftEyeQuery.docs.isNotEmpty) {
             final doc = leftEyeQuery.docs.first;
             final data = doc.data();
-            print('🔵 Left eye raw data: $data');
+            print('Left eye raw data: $data');
 
             final prediction = data['prediction'] as String? ?? '';
             final double healthScore =
@@ -478,7 +476,6 @@ class _HomeScreenState extends State<HomeScreen> {
             print('⚠️ No left eye scans found in Firestore');
           }
 
-          // ✅ Fetch RIGHT EYE
           final rightEyeQuery = await FirebaseFirestore.instance
               .collection('users')
               .doc(userId)
@@ -489,13 +486,12 @@ class _HomeScreenState extends State<HomeScreen> {
               .get()
               .timeout(const Duration(seconds: 5));
 
-          print(
-              '🔵 Right eye query returned ${rightEyeQuery.docs.length} docs');
+          print(' Right eye query returned ${rightEyeQuery.docs.length} docs');
 
           if (rightEyeQuery.docs.isNotEmpty) {
             final doc = rightEyeQuery.docs.first;
             final data = doc.data();
-            print('🔵 Right eye raw data: $data');
+            print('Right eye raw data: $data');
 
             final prediction = data['prediction'] as String? ?? '';
             final double healthScore =
@@ -523,65 +519,104 @@ class _HomeScreenState extends State<HomeScreen> {
             LatestScanCache.updateRightEye(prediction, finalScore);
             rightFetched = true;
           } else {
-            print('⚠️ No right eye scans found in Firestore');
+            print(' No right eye scans found in Firestore');
           }
         } catch (e) {
-          print('🔴 Firestore fetch error: $e');
+          print(' Firestore fetch error: $e');
           isOnline = false; // Treat as offline
         }
       }
 
-      // ✅ FALLBACK: Use cache if Firestore failed or offline
-      // ✅ CRITICAL FIX: Check cache FIRST before defaulting
-      if (!leftFetched) {
-        print('📴 Checking LEFT eye cache...');
-        if (LatestScanCache.hasEyeData(true)) {
-          final prediction = LatestScanCache.leftEyePrediction;
-          final healthScore = LatestScanCache.leftEyeHealthScore;
+      if (!leftFetched && !isOnline) {
+        print(' Checking OFFLINE LEFT eye data...');
+        try {
+          final allScans = await OfflineSyncService().getAllScans();
+          final leftScans = allScans
+              .where((scan) =>
+                  (scan['eye'] as String?)?.toLowerCase() == 'left eye')
+              .toList();
 
-          print('📦 Left eye from cache: $prediction, $healthScore%');
+          if (leftScans.isNotEmpty) {
+            final latestLeftScan = leftScans.first;
+            final prediction = latestLeftScan['prediction'] as String? ?? '';
+            final double healthScore =
+                (latestLeftScan['healthScore'] as num?)?.toDouble() ?? 0.0;
+            final double confidence =
+                (latestLeftScan['confidence'] as num?)?.toDouble() ?? 0.0;
+            final double symptomScore =
+                (latestLeftScan['symptomScore'] as num?)?.toDouble() ?? 0.0;
 
-          final String stage = StagingService.determineStage(
-            prediction: prediction,
-            symptomScore: 0.0,
-            confidence: 0.0,
-          );
+            final String stage = StagingService.determineStage(
+              prediction: prediction,
+              symptomScore: symptomScore.clamp(0.0, 1.0),
+              confidence: confidence.clamp(0.0, 1.0),
+            );
 
-          leftEyeData = {
-            'status': stage,
-            'score': healthScore.round().clamp(0, 100),
-            'stage': stage == 'Normal' ? 'No Cataract' : stage
-          };
-        } else {
-          print('⚠️ No left eye data in cache');
+            final double finalScore =
+                healthScore > 0 ? healthScore : (confidence * 100);
+
+            leftEyeData = {
+              'status': stage,
+              'score': finalScore.round().clamp(0, 100),
+              'stage': stage == 'Normal' ? 'No Cataract' : stage
+            };
+
+            print(
+                '📦 LEFT eye from offline cache: $prediction, ${finalScore.round()}%');
+            leftFetched = true;
+          } else {
+            print('⚠️ No left eye scans in offline cache');
+          }
+        } catch (e) {
+          print('⚠️ Error fetching offline left eye data: $e');
         }
       }
 
-      if (!rightFetched) {
-        print('📴 Checking RIGHT eye cache.. .');
-        if (LatestScanCache.hasEyeData(false)) {
-          final prediction = LatestScanCache.rightEyePrediction;
-          final healthScore = LatestScanCache.rightEyeHealthScore;
+      if (!rightFetched && !isOnline) {
+        print('📴 Checking OFFLINE RIGHT eye data...');
+        try {
+          final allScans = await OfflineSyncService().getAllScans();
+          final rightScans = allScans
+              .where((scan) =>
+                  (scan['eye'] as String?)?.toLowerCase() == 'right eye')
+              .toList();
 
-          print('📦 Right eye from cache:  $prediction, $healthScore%');
+          if (rightScans.isNotEmpty) {
+            final latestRightScan = rightScans.first;
+            final prediction = latestRightScan['prediction'] as String? ?? '';
+            final double healthScore =
+                (latestRightScan['healthScore'] as num?)?.toDouble() ?? 0.0;
+            final double confidence =
+                (latestRightScan['confidence'] as num?)?.toDouble() ?? 0.0;
+            final double symptomScore =
+                (latestRightScan['symptomScore'] as num?)?.toDouble() ?? 0.0;
 
-          final String stage = StagingService.determineStage(
-            prediction: prediction,
-            symptomScore: 0.0,
-            confidence: 0.0,
-          );
+            final String stage = StagingService.determineStage(
+              prediction: prediction,
+              symptomScore: symptomScore.clamp(0.0, 1.0),
+              confidence: confidence.clamp(0.0, 1.0),
+            );
 
-          rightEyeData = {
-            'status': stage,
-            'score': healthScore.round().clamp(0, 100),
-            'stage': stage == 'Normal' ? 'No Cataract' : stage
-          };
-        } else {
-          print('⚠️ No right eye data in cache');
+            final double finalScore =
+                healthScore > 0 ? healthScore : (confidence * 100);
+
+            rightEyeData = {
+              'status': stage,
+              'score': finalScore.round().clamp(0, 100),
+              'stage': stage == 'Normal' ? 'No Cataract' : stage
+            };
+
+            print(
+                '📦 RIGHT eye from offline cache: $prediction, ${finalScore.round()}%');
+            rightFetched = true;
+          } else {
+            print('⚠️ No right eye scans in offline cache');
+          }
+        } catch (e) {
+          print('⚠️ Error fetching offline right eye data: $e');
         }
       }
 
-      // ✅ Calculate overall score
       int overallScore = 0;
       if ((leftEyeData['score'] as num) > 0 ||
           (rightEyeData['score'] as num) > 0) {
@@ -602,7 +637,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       print(
-          '✅ Final data - Left: ${leftEyeData['score']}%, Right: ${rightEyeData['score']}%, Overall: $overallScore%');
+          ' Final data - Left:  ${leftEyeData['score']}%, Right: ${rightEyeData['score']}%, Overall: $overallScore%');
 
       setState(() {
         _eyeHealthData = {
@@ -613,7 +648,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingMetrics = false;
       });
     } catch (e) {
-      print('❌ Error in _fetchEyeHealthData:  $e');
+      print('❌ Error in _fetchEyeHealthData: $e');
       setState(() {
         _isLoadingMetrics = false;
       });
@@ -663,24 +698,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _onNavItemTapped(int index) {
-    // ✅ Special handling for Eye Scan - always allow it to open
     if (index == 2) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SymptomAssessmentScreen(
-            onStart: () {
-              Navigator.pop(context);
-            },
-          ),
-        ),
-      );
+      // Show disclaimer dialog for eye scan
+      _showEyeScanDisclaimer(context, false);
       return; // Don't update selected index for Eye Scan
     }
 
-    // ✅ For other tabs, check if already selected
     if (_selectedNavIndex == index) {
-      return; // Already on this tab, do nothing
+      return;
     }
 
     setState(() {
@@ -689,7 +714,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     switch (index) {
       case 0: // Home
-        // Already on home screen, no navigation needed
         break;
       case 1: // Progress
         Navigator.pushAndRemoveUntil(
@@ -893,7 +917,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Text(
                             _username.isNotEmpty
                                 ? _username[0].toUpperCase()
-                                : "A", // ✅ DYNAMIC - uses first letter of username
+                                : "A",
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -1003,7 +1027,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                                   Text(
                                                     getEyeHealthStatusTitle(),
                                                     style: TextStyle(
-                                                      // ✅ No 'const' here
                                                       fontSize: 22,
                                                       fontWeight:
                                                           FontWeight.bold,
@@ -1182,7 +1205,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                               SizedBox(
                                                 width: size.width * 0.6,
                                                 child: Text(
-                                                  _getHealthDescription(), // ✅ Dynamic description
+                                                  _getHealthDescription(),
                                                   style: TextStyle(
                                                     fontSize: 14,
                                                     color: Colors.white
@@ -1197,24 +1220,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ),
                                   ),
                                   // Score Circle
-                                  Container(
-                                    width: 60,
-                                    height: 60,
-                                    decoration: const BoxDecoration(
-                                      color: Colors.white,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Center(
-                                      child: Text(
-                                        "${_eyeHealthData['overallScore']}%",
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.blue.shade800,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
                                 ],
                               ),
                             ],
@@ -1231,7 +1236,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ✅ NEW: Title with tooltip
                     Row(
                       children: [
                         const Text(
@@ -1455,7 +1459,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                         ),
                                         child: LayoutBuilder(
                                           builder: (context, constraints) {
-                                            // ✅ Clamp to prevent overflow
                                             double leftPercent =
                                                 ((_eyeHealthData['leftEye']
                                                                 ['score'] ??
@@ -1962,8 +1965,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   action: SnackBarAction(
                                     label: 'Start Scan',
                                     onPressed: () {
-                                      _onNavItemTapped(
-                                          2); // Navigate to scan screen
+                                      _showEyeScanDisclaimer(context, true);
                                     },
                                   ),
                                 ),
@@ -2242,5 +2244,234 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  // Add this method in _HomeScreenState class (around line 800-850)
+  void _showEyeScanDisclaimer(BuildContext context, bool fromQuickAction) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          bool hasAgreed = false;
+
+          return AlertDialog(
+            title: Row(
+              children: [
+                Icon(Icons.camera_alt, color: Colors.blue.shade700),
+                const SizedBox(width: 12),
+                const Text(
+                  'Eye Scan Data Storage',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Before proceeding with your eye scan, please review how your data will be stored:',
+                    style: TextStyle(
+                      fontSize: 14,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Data storage points
+                  _buildDisclaimerPoint(
+                    icon: Icons.cloud_upload,
+                    color: Colors.blue,
+                    title: 'Cloud Storage',
+                    description:
+                        'Your scan results will be securely stored in our cloud database (Firebase) for tracking and monitoring.',
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildDisclaimerPoint(
+                    icon: Icons.devices,
+                    color: Colors.green,
+                    title: 'Local Storage',
+                    description:
+                        'Data will also be stored locally on your device when offline and automatically synchronized when online.',
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildDisclaimerPoint(
+                    icon: Icons.shield,
+                    color: Colors.purple,
+                    title: 'Data Security',
+                    description:
+                        'All data is encrypted and only accessible to authorized health administrators for monitoring purposes.',
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildDisclaimerPoint(
+                    icon: Icons.visibility,
+                    color: Colors.orange,
+                    title: 'Accessibility',
+                    description:
+                        'You can view, track, and delete your scan history at any time through the Progress section.',
+                  ),
+                  const SizedBox(height: 16),
+
+                  const Divider(),
+                  const SizedBox(height: 12),
+
+                  // Agreement checkbox
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Checkbox(
+                        value: hasAgreed,
+                        onChanged: (value) {
+                          setState(() {
+                            hasAgreed = value ?? false;
+                          });
+                        },
+                        activeColor: Colors.blue.shade700,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'I understand and agree',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'I acknowledge that my eye scan data will be stored as described above for health monitoring purposes.',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade700,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Log that user declined
+                  _logDisclaimerAction('declined');
+                },
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: !hasAgreed
+                    ? null
+                    : () async {
+                        // Log agreement
+                        await _logDisclaimerAction('accepted');
+
+                        Navigator.pop(context);
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => SymptomAssessmentScreen(
+                              onStart: () {
+                                Navigator.pop(context);
+                              },
+                            ),
+                          ),
+                        );
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.shade700,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                ),
+                child: const Text('Continue to Scan'),
+              ),
+            ],
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildDisclaimerPoint({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String description,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey.shade700,
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _logDisclaimerAction(String action) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      await FirebaseFirestore.instance.collection('audit_logs').add({
+        'timestamp': FieldValue.serverTimestamp(),
+        'userId': user.uid,
+        'action': 'eye_scan_disclaimer_$action',
+        'details': 'User $action eye scan data storage disclaimer',
+        'userAgent': 'Mobile App',
+      });
+      print('Eye scan disclaimer $action logged');
+    } catch (e) {
+      print(' Error logging disclaimer action: $e');
+    }
   }
 }

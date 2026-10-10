@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 class SecurityService {
   static const int MAX_FAILED_ATTEMPTS = 5;
-  static const int LOCKOUT_MINUTES = 15;
+  static const int LOCKOUT_MINUTES = 5;
   // Add this method to the SecurityService class
 
   /// Rate limit password reset requests

@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_1/Screens/scoring_service.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
-import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'package:flutter_application_1/services/staging_service.dart';
 import 'dart:math';
 import 'package:pdf/pdf.dart';
@@ -72,151 +71,41 @@ class _FullReportScreenState extends State<FullReportScreen> {
     DocumentSnapshot? scanDoc;
     Map<String, dynamic>? scan;
 
-// Fetch scan: specific if scanId, else latest
+    // Fetch scan: specific if scanId, else latest
     if (widget.scanId != null) {
-      try {
-        scanDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('scans')
-            .doc(widget.scanId)
-            .get()
-            .timeout(const Duration(seconds: 3));
-        scan = scanDoc.exists ? scanDoc.data() as Map<String, dynamic>? : null;
-        print('✅ Loaded scan from Firestore: ${widget.scanId}');
-      } catch (e) {
-        print('⚠️ Firestore fetch failed:  $e');
-        scan = null; // Will try offline below
-      }
+      scanDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('scans')
+          .doc(widget.scanId)
+          .get();
+      scan = scanDoc.exists ? scanDoc.data() as Map<String, dynamic>? : null;
     } else {
-      try {
-        final scanDocs = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('scans')
-            .orderBy('timestamp', descending: true)
-            .limit(1)
-            .get()
-            .timeout(const Duration(seconds: 3));
-        scan = scanDocs.docs.isNotEmpty ? scanDocs.docs.first.data() : {};
-        scanDoc = scanDocs.docs.isNotEmpty ? scanDocs.docs.first : null;
-        print('✅ Loaded latest scan from Firestore');
-      } catch (e) {
-        print('⚠️ Firestore latest scan fetch failed: $e');
-        scan = null;
-      }
+      final scanDocs = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('scans')
+          .orderBy('timestamp', descending: true)
+          .limit(1)
+          .get();
+      scan = scanDocs.docs.isNotEmpty ? scanDocs.docs.first.data() : {};
+      scanDoc = scanDocs.docs.isNotEmpty ? scanDocs.docs.first : null;
     }
 
-// ✅ NEW: Fallback to offline cache if not found online
-    if (scan == null && widget.scanId != null && userId != null) {
-      try {
-        print('📴 Attempting to load from offline cache:  ${widget.scanId}');
-        final allScans = await OfflineSyncService().getAllScans();
-        final offlineScan = allScans.firstWhere(
-          (s) => s['scanId'] == widget.scanId,
-          orElse: () => {},
-        );
-        if (offlineScan.isNotEmpty) {
-          scan = offlineScan;
-          print('✅ Loaded scan from offline cache: ${widget.scanId}');
-        } else {
-          print('❌ Scan not found in offline cache:  ${widget.scanId}');
-        }
-      } catch (e) {
-        print('⚠️ Offline cache lookup failed: $e');
-      }
-    }
-
-// Ensure scan is never null
+    // Ensure scan is never null
     scan ??= {};
 
-    Map<String, dynamic>? assessment = {};
-
-    if (scan != null && scan['timestamp'] != null) {
-      try {
-        // ✅ FIX: Match by scanId instead of scanDate for more reliable linking
-        final scanId = widget.scanId ?? scan['scanId'];
-
-        if (scanId != null && scanId.isNotEmpty) {
-          // Try to find assessment that was created close to this scan
-          final scanTimestamp = scan['timestamp'];
-          DateTime? scanDateTime;
-
-          if (scanTimestamp is Timestamp) {
-            scanDateTime = scanTimestamp.toDate();
-          } else if (scanTimestamp is String) {
-            scanDateTime = DateTime.tryParse(scanTimestamp);
-          }
-
-          // Get all assessments and find the closest one by time
-          final assessmentDocs = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(userId)
-              .collection('assessments')
-              .orderBy('timestamp', descending: true)
-              .limit(5) // Get last 5 assessments
-              .get();
-
-          if (assessmentDocs.docs.isNotEmpty) {
-            // Find the assessment closest in time to the scan
-            Map<String, dynamic>? closestAssessment;
-            int smallestDifference = 999999999;
-
-            for (var doc in assessmentDocs.docs) {
-              final assessmentData = doc.data();
-              final assessmentTimestamp = assessmentData['timestamp'];
-
-              DateTime? assessmentDateTime;
-              if (assessmentTimestamp is Timestamp) {
-                assessmentDateTime = assessmentTimestamp.toDate();
-              } else if (assessmentTimestamp is String) {
-                assessmentDateTime = DateTime.tryParse(assessmentTimestamp);
-              }
-
-              // If both have timestamps, find the closest one (within 5 minutes)
-              if (scanDateTime != null && assessmentDateTime != null) {
-                final difference =
-                    assessmentDateTime.difference(scanDateTime).inSeconds.abs();
-                if (difference < smallestDifference && difference < 300) {
-                  // 5 minutes
-                  smallestDifference = difference;
-                  closestAssessment = assessmentData;
-                }
-              }
-            }
-
-            assessment = closestAssessment ?? {};
-            if (assessment.isNotEmpty) {
-              print(
-                  '✅ Loaded matching assessment (${smallestDifference}s difference)');
-            }
-          }
-        } else {
-          print('⚠️ No scanId found');
-        }
-      } catch (e) {
-        print('Error loading assessment: $e');
-        assessment = {};
-      }
-    } else {
-      // Fallback:  just get the latest assessment
-      try {
-        final assessmentDocs = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('assessments')
-            .orderBy('timestamp', descending: true)
-            .limit(1)
-            .get();
-
-        if (assessmentDocs.docs.isNotEmpty) {
-          assessment = assessmentDocs.docs.first.data() as Map<String, dynamic>;
-          print('⚠️ Using latest assessment as fallback');
-        }
-      } catch (e) {
-        print('Error loading latest assessment: $e');
-      }
-    }
+    // Fetch assessment: latest if none, else match timestamp if possible
+    QuerySnapshot assessmentDocs = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('assessments')
+        .orderBy('timestamp', descending: true)
+        .limit(1)
+        .get();
+    Map<String, dynamic>? assessment = assessmentDocs.docs.isNotEmpty
+        ? assessmentDocs.docs.first.data() as Map<String, dynamic>
+        : {};
 
     setState(() {
       _profile = profile;
@@ -1008,10 +897,6 @@ class _FullReportScreenState extends State<FullReportScreen> {
 
                   const SizedBox(height: 24),
 
-                  // Eye Scan Summary Section
-
-                  // Eye Scan Summary Section
-                  // Eye Scan Summary Section
                   _buildSectionTitle('Eye Scan Summary'),
                   const SizedBox(height: 12),
                   Container(
@@ -1063,6 +948,56 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                     ),
                                   ),
                                 ],
+                              ),
+                              const SizedBox(height: 16),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border:
+                                      Border.all(color: Colors.blue.shade200),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.shade100,
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                          child: Icon(
+                                            Icons.camera_alt,
+                                            size: 16,
+                                            color: Colors.blue.shade700,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'AI Image Analysis',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 14,
+                                            color: Colors.grey.shade800,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    Text(
+                                      '${((_scan?['confidence'] as num?) != null ? ((_scan!['confidence'] as num) * 100).round() : 0)}%',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: Colors.blue.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                               const SizedBox(height: 16),
 
@@ -1532,7 +1467,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
                                 ),
                                 child: Text(
                                   _assessment?['conclusion'] ??
-                                      'No assessment data',
+                                      'No conclusion found.',
                                   style: const TextStyle(
                                     fontSize: 14,
                                     height: 1.5,
