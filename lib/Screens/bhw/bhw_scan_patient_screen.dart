@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../models/bhw_patient_model.dart';
-import '../../providers/bhw_patient_provider.dart';
-import '../symptom_assessment_provider.dart';
+import '../../../data/models/bhw_patient_model.dart';
+import '../../features/bhw/providers/bhw_patient_provider.dart';
+import '../../../features/symptom_assessment/providers/symptom_assessment_provider.dart';
 import 'bhw_symptom_assessment_screen.dart';
 
 class BHWScanPatientScreen extends StatefulWidget {

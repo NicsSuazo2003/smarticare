@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/Screens/symptom_assessment_provider.dart';
+import 'package:flutter_application_1/features/symptom_assessment/providers/symptom_assessment_provider.dart';
 import 'package:provider/provider.dart';
 import 'symptom_assessment_q6_screen.dart'; // Import Q6 screen
 

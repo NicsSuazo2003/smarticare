@@ -14,7 +14,7 @@ import 'faqs_screen.dart'; // Import for FAQsScreen
 import 'privacy_policy_screen.dart'; // Import for PrivacyPolicyScreen
 import 'terms_of_service_screen.dart'; // Added import for TermsOfServiceScreen
 import 'package:firebase_auth/firebase_auth.dart'; // Import FirebaseAuth
-import '../screens/login.dart'; // Import the login screen
+import '../features/auth/presentation/login.dart'; // Import the login screen
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});

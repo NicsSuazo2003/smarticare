@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
-import '../../providers/bhw_patient_provider.dart';
-import '../../models/bhw_patient_model.dart';
+import '../../features/bhw/providers/bhw_patient_provider.dart';
+import '../../../data/models/bhw_patient_model.dart';
 
 class BHWHomeScreen extends StatefulWidget {
   const BHWHomeScreen({Key? key}) : super(key: key);

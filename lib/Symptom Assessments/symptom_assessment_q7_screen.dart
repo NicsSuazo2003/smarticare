@@ -8,7 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_1/Screens/eye_scan_screen.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:provider/provider.dart';
-import '../screens/symptom_assessment_provider.dart';
+import '../features/symptom_assessment/providers/symptom_assessment_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../services/offline_sync_service.dart'; // Add this import at the top

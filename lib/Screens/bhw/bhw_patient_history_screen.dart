@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../models/bhw_patient_model.dart';
+import '../../../data/models/bhw_patient_model.dart';
 import 'bhw_result_slip_screen.dart';
 
 class BHWPatientHistoryScreen extends StatelessWidget {

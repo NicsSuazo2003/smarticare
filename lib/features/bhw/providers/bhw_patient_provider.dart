@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../models/bhw_patient_model.dart';
+import '../../../../data/models/bhw_patient_model.dart';
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 

@@ -4,10 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_1/Screens/home_screen.dart';
 
 import 'package:flutter_application_1/audit_log_service.dart';
-import 'package:flutter_application_1/screens/login.dart';
+import 'package:flutter_application_1/features/auth/presentation/login.dart';
 import 'package:intl/intl.dart';
-import 'eye_scan_screen.dart';
-import 'symptom_assessment_screen.dart';
+import '../../../Screens/eye_scan_screen.dart';
+import '../../../Screens/symptom_assessment_screen.dart';
 
 class CompleteProfileScreen extends StatefulWidget {
   final String uid;

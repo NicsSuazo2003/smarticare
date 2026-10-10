@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../providers/bhw_patient_provider.dart';
-import '../../models/bhw_patient_model.dart';
+import '../../features/bhw/providers/bhw_patient_provider.dart';
+import '../../../data/models/bhw_patient_model.dart';
 import 'bhw_result_slip_screen.dart';
 import 'bhw_patient_history_screen.dart';
 

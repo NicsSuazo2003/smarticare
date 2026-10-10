@@ -20,7 +20,7 @@ import 'reminder_screen.dart';
 import 'profile_screen.dart';
 import 'tflite_helper.dart'; // Your model helper
 import 'package:provider/provider.dart';
-import '../user_session_provider.dart';
+import '../features/auth/providers/user_session_provider.dart';
 import 'package:image/image.dart' as img;
 import 'package:cloud_firestore/cloud_firestore.dart';
 

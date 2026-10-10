@@ -20,7 +20,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'symptom_assessment_screen.dart';
 import 'package:provider/provider.dart';
-import '../user_session_provider.dart';
+import '../features/auth/providers/user_session_provider.dart';
 
 class ScanResultScreen extends StatefulWidget {
   final String imageUrl;

@@ -1,5 +1,5 @@
 import 'package:hive/hive.dart';
-import 'reminder_model.dart';
+import 'data/models/reminder_model.dart';
 import 'package:uuid/uuid.dart';
 
 Future<void> addReminder(

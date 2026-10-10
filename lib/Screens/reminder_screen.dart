@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/main.dart';
-import 'package:flutter_application_1/reminder_model.dart';
+import 'package:flutter_application_1/data/models/reminder_model.dart';
 
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';

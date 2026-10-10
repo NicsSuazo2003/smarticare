@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/Screens/complete_profile_screen.dart';
-import 'package:flutter_application_1/Screens/forgot_password_screen.dart';
+import 'package:flutter_application_1/features/auth/presentation/complete_profile_screen.dart';
+import 'package:flutter_application_1/features/auth/presentation/forgot_password_screen.dart';
 import 'package:flutter_application_1/Screens/latest_scan_cache.dart';
 import 'package:flutter_application_1/Screens/symptom_assessment_screen.dart';
 import 'package:flutter_application_1/Screens/terms_of_service_screen.dart';
@@ -11,16 +11,16 @@ import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:flutter_application_1/services/otp_service.dart';
 import 'package:flutter_application_1/services/security_service.dart';
 import 'package:flutter_svg/svg.dart';
-import 'app_permission_screen.dart';
+import '../../../Screens/app_permission_screen.dart';
 import 'package:provider/provider.dart';
-import '../user_session_provider.dart'; // adjust the path as needed
-import 'eye_scan_screen.dart'; // for direct navigation
+import '../providers/user_session_provider.dart'; // adjust the path as needed
+import '../../../Screens/eye_scan_screen.dart'; // for direct navigation
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'otp_verification_screen.dart';
-import 'privacy_policy_screen.dart';
+import '../../../Screens/privacy_policy_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import '../../models/bhw_patient_model.dart';
+import '../../../data/models/bhw_patient_model.dart';
 
 class BHWResultSlipScreen extends StatefulWidget {
   final BHWPatient patient;

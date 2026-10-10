@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../providers/bhw_patient_provider.dart';
-import '../../models/bhw_patient_model.dart';
+import '../../features/bhw/providers/bhw_patient_provider.dart';
+import '../../../data/models/bhw_patient_model.dart';
 
 class BHWAnalyticsScreen extends StatefulWidget {
   const BHWAnalyticsScreen({Key? key}) : super(key: key);
