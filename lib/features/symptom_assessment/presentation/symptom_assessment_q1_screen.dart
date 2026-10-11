@@ -9,7 +9,7 @@ class SymptomAssessmentQ1Screen extends StatefulWidget {
   const SymptomAssessmentQ1Screen({
     super.key,
     required this.onAnswer,
-    required Null Function() onNext,
+    VoidCallback? onNext,
   });
 
   @override

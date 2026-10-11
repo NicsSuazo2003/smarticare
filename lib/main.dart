@@ -9,6 +9,7 @@ import 'firebase_options.dart';
 import 'features/auth/presentation/login.dart';
 import 'features/auth/presentation/register_screen.dart';
 import 'features/profile/presentation/personal_screen.dart';
+import 'features/profile/providers/activity_log_provider.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'package:provider/provider.dart';
 import 'features/symptom_assessment/providers/symptom_assessment_provider.dart';
@@ -162,6 +163,7 @@ void main() async {
           ChangeNotifierProvider(create: (_) => SymptomAssessmentProvider()),
           ChangeNotifierProvider(create: (_) => UserSessionProvider()),
           ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
+          ChangeNotifierProvider(create: (_) => ActivityLogProvider()),
         ],
         child: const MyApp(),
       ),

@@ -12,7 +12,7 @@ class SymptomAssessmentQ5Screen extends StatefulWidget {
     super.key,
     required this.onAnswer,
     required this.onPrevious,
-    required Null Function() onNext,
+    VoidCallback? onNext,
   });
 
   @override

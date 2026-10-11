@@ -3,7 +3,7 @@ import 'symptom_assessment_q1_screen.dart'; // Import the Q1 screen
 import 'package:flutter_application_1/core/utils/logger.dart';
 
 class SymptomAssessmentScreen extends StatefulWidget {
-  const SymptomAssessmentScreen({super.key, required Null Function() onStart});
+  const SymptomAssessmentScreen({super.key, VoidCallback? onStart});
 
   @override
   State<SymptomAssessmentScreen> createState() =>
