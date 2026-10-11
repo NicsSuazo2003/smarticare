@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../data/symptom_questions.dart';
 import '../domain/symptom_question.dart';
 import '../providers/symptom_assessment_provider.dart';
+import 'symptom_assessment_q7_screen.dart';
+import 'symptom_assessment_q7_screen.dart';
 
 class SymptomQuestionScreen extends StatefulWidget {
   const SymptomQuestionScreen({
@@ -47,7 +49,25 @@ class _SymptomQuestionScreenState extends State<SymptomQuestionScreen> {
 
   void _goNext() {
     final next = SymptomQuestions.nextNumber(widget.question.number);
-    if (next == null) return; // shouldn't happen for q1-q6
+
+    if (next == null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SymptomAssessmentQ7Screen(
+            onAnswer: (answer) {
+              context
+                  .read<SymptomAssessmentProvider>()
+                  .setAnswer('q7', answer);
+            },
+            onPrevious: () => Navigator.pop(context),
+            onFinish: () =>
+                Navigator.of(context).popUntil((route) => route.isFirst),
+          ),
+        ),
+      );
+      return;
+    }
 
     Navigator.push(
       context,
