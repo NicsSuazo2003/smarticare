@@ -11,8 +11,8 @@ import 'package:flutter_application_1/features/eye_scan/data/latest_scan_cache.d
 import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'package:flutter_application_1/services/ml/staging_service.dart';
 import '../../../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
-import '../../../Screens/find_clinics_screen.dart';
-import '../../../Screens/appointments_screen.dart';
+import '../../../features/clinics/presentation/find_clinics_screen.dart';
+import '../../../features/appointments/presentation/appointments_screen.dart';
 import '../../../Screens/progress_screen.dart';
 import '../../../features/reminders/presentation/reminder_screen.dart';
 import '../../../Screens/profile_screen.dart';

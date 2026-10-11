@@ -10,7 +10,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
-import '../../../Screens/find_clinics_screen.dart';
+import '../../../features/clinics/presentation/find_clinics_screen.dart';
 import '../../../features/reminders/presentation/reminder_screen.dart';
 
 class FullReportScreen extends StatefulWidget {

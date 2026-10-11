@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/Screens/appointments_screen.dart';
+import 'package:flutter_application_1/features/appointments/presentation/appointments_screen.dart';
 
 class ReferralCriteriaCard extends StatelessWidget {
   final String prediction;

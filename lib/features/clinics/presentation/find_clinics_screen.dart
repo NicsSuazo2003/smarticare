@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
-import '../features/home/presentation/home_screen.dart';
-import 'progress_screen.dart';
-import '../features/reminders/presentation/reminder_screen.dart';
-import 'profile_screen.dart';
+import '../../home/presentation/home_screen.dart';
+import '../../../Screens/progress_screen.dart';
+import '../../reminders/presentation/reminder_screen.dart';
+import '../../../Screens/profile_screen.dart';
 import 'clinic_detail_screen.dart';
 
 class FindClinicsScreen extends StatefulWidget {
