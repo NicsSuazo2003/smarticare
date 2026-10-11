@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -21,6 +20,7 @@ import '../../../features/profile/presentation/view_history_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../features/eye_scan/presentation/full_report_screen.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool refreshData;
@@ -56,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    print("HomeScreen initState called");
+    Logger.d("HomeScreen initState called");
 
     _updateDateTime();
     _fetchEyeHealthData();
@@ -104,12 +104,12 @@ class _HomeScreenState extends State<HomeScreen> {
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
       (ConnectivityResult result) async {
         if (result != ConnectivityResult.none) {
-          print('🌐 Back online - checking for pending sync...');
+          Logger.d('🌐 Back online - checking for pending sync...');
 
           // Check sync stats first
           final syncStats = await OfflineSyncService().getSyncStats();
           if (syncStats['totalPending']! > 0) {
-            print(
+            Logger.d(
                 '🔄 Found ${syncStats['totalPending']} pending items - starting sync...');
             await OfflineSyncService().syncAllPendingData();
 
@@ -148,9 +148,9 @@ class _HomeScreenState extends State<HomeScreen> {
         _recentScans = allScans;
       });
 
-      print('Loaded ${_recentScans.length} scans (online + offline)');
+      Logger.d('Loaded ${_recentScans.length} scans (online + offline)');
     } catch (e) {
-      print('Error fetching recent scans: $e');
+      Logger.d('Error fetching recent scans: $e');
     }
   }
 
@@ -385,16 +385,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _fetchEyeHealthData() async {
     try {
-      print('🔵 _fetchEyeHealthData START');
+      Logger.d('🔵 _fetchEyeHealthData START');
       setState(() {
         _isLoadingMetrics = true;
       });
 
       final userId = FirebaseAuth.instance.currentUser?.uid;
-      print('🔵 userId: $userId');
+      Logger.d('🔵 userId: $userId');
 
       if (userId == null) {
-        print('🔴 No userId - aborting');
+        Logger.d('🔴 No userId - aborting');
         setState(() {
           _isLoadingMetrics = false;
         });
@@ -421,14 +421,14 @@ class _HomeScreenState extends State<HomeScreen> {
         final connectivity = Connectivity();
         final result = await connectivity.checkConnectivity();
         isOnline = result != ConnectivityResult.none;
-        print(' Online:  $isOnline');
+        Logger.d(' Online:  $isOnline');
       } catch (e) {
-        print('Connectivity check failed: $e');
+        Logger.d('Connectivity check failed: $e');
         isOnline = false;
       }
 
       if (isOnline) {
-        print('Fetching from Firestore.. .');
+        Logger.d('Fetching from Firestore.. .');
         try {
           final leftEyeQuery = await FirebaseFirestore.instance
               .collection('users')
@@ -440,12 +440,12 @@ class _HomeScreenState extends State<HomeScreen> {
               .get()
               .timeout(const Duration(seconds: 5));
 
-          print(' Left eye query returned ${leftEyeQuery.docs.length} docs');
+          Logger.d(' Left eye query returned ${leftEyeQuery.docs.length} docs');
 
           if (leftEyeQuery.docs.isNotEmpty) {
             final doc = leftEyeQuery.docs.first;
             final data = doc.data();
-            print('Left eye raw data: $data');
+            Logger.d('Left eye raw data: $data');
 
             final prediction = data['prediction'] as String? ?? '';
             final double healthScore =
@@ -473,7 +473,7 @@ class _HomeScreenState extends State<HomeScreen> {
             LatestScanCache.updateLeftEye(prediction, finalScore);
             leftFetched = true;
           } else {
-            print('⚠️ No left eye scans found in Firestore');
+            Logger.d('⚠️ No left eye scans found in Firestore');
           }
 
           final rightEyeQuery = await FirebaseFirestore.instance
@@ -486,12 +486,12 @@ class _HomeScreenState extends State<HomeScreen> {
               .get()
               .timeout(const Duration(seconds: 5));
 
-          print(' Right eye query returned ${rightEyeQuery.docs.length} docs');
+          Logger.d(' Right eye query returned ${rightEyeQuery.docs.length} docs');
 
           if (rightEyeQuery.docs.isNotEmpty) {
             final doc = rightEyeQuery.docs.first;
             final data = doc.data();
-            print('Right eye raw data: $data');
+            Logger.d('Right eye raw data: $data');
 
             final prediction = data['prediction'] as String? ?? '';
             final double healthScore =
@@ -519,16 +519,16 @@ class _HomeScreenState extends State<HomeScreen> {
             LatestScanCache.updateRightEye(prediction, finalScore);
             rightFetched = true;
           } else {
-            print(' No right eye scans found in Firestore');
+            Logger.d(' No right eye scans found in Firestore');
           }
         } catch (e) {
-          print(' Firestore fetch error: $e');
+          Logger.d(' Firestore fetch error: $e');
           isOnline = false; // Treat as offline
         }
       }
 
       if (!leftFetched && !isOnline) {
-        print(' Checking OFFLINE LEFT eye data...');
+        Logger.d(' Checking OFFLINE LEFT eye data...');
         try {
           final allScans = await OfflineSyncService().getAllScans();
           final leftScans = allScans
@@ -561,19 +561,19 @@ class _HomeScreenState extends State<HomeScreen> {
               'stage': stage == 'Normal' ? 'No Cataract' : stage
             };
 
-            print(
+            Logger.d(
                 '📦 LEFT eye from offline cache: $prediction, ${finalScore.round()}%');
             leftFetched = true;
           } else {
-            print('⚠️ No left eye scans in offline cache');
+            Logger.d('⚠️ No left eye scans in offline cache');
           }
         } catch (e) {
-          print('⚠️ Error fetching offline left eye data: $e');
+          Logger.d('⚠️ Error fetching offline left eye data: $e');
         }
       }
 
       if (!rightFetched && !isOnline) {
-        print('📴 Checking OFFLINE RIGHT eye data...');
+        Logger.d('📴 Checking OFFLINE RIGHT eye data...');
         try {
           final allScans = await OfflineSyncService().getAllScans();
           final rightScans = allScans
@@ -606,14 +606,14 @@ class _HomeScreenState extends State<HomeScreen> {
               'stage': stage == 'Normal' ? 'No Cataract' : stage
             };
 
-            print(
+            Logger.d(
                 '📦 RIGHT eye from offline cache: $prediction, ${finalScore.round()}%');
             rightFetched = true;
           } else {
-            print('⚠️ No right eye scans in offline cache');
+            Logger.d('⚠️ No right eye scans in offline cache');
           }
         } catch (e) {
-          print('⚠️ Error fetching offline right eye data: $e');
+          Logger.d('⚠️ Error fetching offline right eye data: $e');
         }
       }
 
@@ -636,7 +636,7 @@ class _HomeScreenState extends State<HomeScreen> {
         overallScore = divisor > 0 ? (sum / divisor).round() : 0;
       }
 
-      print(
+      Logger.d(
           ' Final data - Left:  ${leftEyeData['score']}%, Right: ${rightEyeData['score']}%, Overall: $overallScore%');
 
       setState(() {
@@ -648,7 +648,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _isLoadingMetrics = false;
       });
     } catch (e) {
-      print('❌ Error in _fetchEyeHealthData: $e');
+      Logger.d('❌ Error in _fetchEyeHealthData: $e');
       setState(() {
         _isLoadingMetrics = false;
       });
@@ -693,7 +693,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
     } catch (e) {
-      print('Error fetching username: $e');
+      Logger.d('Error fetching username: $e');
     }
   }
 
@@ -866,7 +866,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     // Logo
                     Row(
                       children: [
-                        Container(
+                        SizedBox(
                           width: 40,
                           height: 40,
                           child: ClipRRect(
@@ -2469,9 +2469,9 @@ class _HomeScreenState extends State<HomeScreen> {
         'details': 'User $action eye scan data storage disclaimer',
         'userAgent': 'Mobile App',
       });
-      print('Eye scan disclaimer $action logged');
+      Logger.d('Eye scan disclaimer $action logged');
     } catch (e) {
-      print(' Error logging disclaimer action: $e');
+      Logger.d(' Error logging disclaimer action: $e');
     }
   }
 }

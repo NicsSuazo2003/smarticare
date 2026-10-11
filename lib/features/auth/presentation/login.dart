@@ -1,26 +1,22 @@
-import 'dart:io';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/features/auth/presentation/complete_profile_screen.dart';
-import 'package:flutter_application_1/features/auth/presentation/forgot_password_screen.dart';
 import 'package:flutter_application_1/features/eye_scan/data/latest_scan_cache.dart';
 import 'package:flutter_application_1/features/symptom_assessment/presentation/symptom_assessment_screen.dart';
-import 'package:flutter_application_1/features/onboarding/presentation/terms_of_service_screen.dart';
 import 'package:flutter_application_1/services/audit_log_service.dart';
 import 'package:flutter_application_1/services/otp_service.dart';
 import 'package:flutter_application_1/services/security_service.dart';
 import 'package:flutter_svg/svg.dart';
 import '../../../features/onboarding/presentation/app_permission_screen.dart';
-import 'package:provider/provider.dart';
-import '../providers/user_session_provider.dart'; // adjust the path as needed
+// adjust the path as needed
 import '../../../features/eye_scan/presentation/eye_scan_screen.dart'; // for direct navigation
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'otp_verification_screen.dart';
-import '../../../features/onboarding/presentation/privacy_policy_screen.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -35,7 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String _password = '';
   bool _obscureText = true;
   bool _isLoading = false;
-  bool _rememberMe = false;
+  final bool _rememberMe = false;
 
   final _emailController = TextEditingController();
 
@@ -89,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
             return;
           }
         } catch (e) {
-          print('Error checking sign-in methods: $e');
+          Logger.d('Error checking sign-in methods: $e');
           // Continue with normal flow if this fails
         }
 
@@ -153,7 +149,7 @@ class _LoginScreenState extends State<LoginScreen> {
             .doc(userCredential.user!.uid)
             .get();
 
-        final userData = userDoc.data() as Map<String, dynamic>?;
+        final userData = userDoc.data();
         final twoFactorEnabled = userData?['twoFactorEnabled'] ?? false;
 
         setState(() => _isLoading = false);
@@ -879,7 +875,7 @@ SmartiCare Security Team
   Future<bool> _showTermsDialog(BuildContext context) async {
     bool agreed = false;
     bool scrolledToEnd = false;
-    const double _endTolerance = 20.0; // px tolerance from bottom
+    const double endTolerance = 20.0; // px tolerance from bottom
 
     return await showDialog<bool>(
           context: context,
@@ -901,7 +897,7 @@ SmartiCare Security Team
                           // If content is non-scrollable (maxScrollExtent == 0) treat as already at end
                           final atEnd = metrics.maxScrollExtent <= 0 ||
                               metrics.pixels >=
-                                  metrics.maxScrollExtent - _endTolerance;
+                                  metrics.maxScrollExtent - endTolerance;
                           if (atEnd && !scrolledToEnd) {
                             setState(() {
                               scrolledToEnd = true;

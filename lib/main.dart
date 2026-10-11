@@ -22,9 +22,9 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'features/auth/presentation/complete_profile_screen.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 // ✅ ADD THIS IMPORT
-import 'package:flutter_application_1/services/one_time_scan_migration.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
@@ -32,14 +32,14 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print('Handling background message: ${message.messageId}');
+  Logger.d('Handling background message: ${message.messageId}');
 }
 
 Future<void> saveTokenToFirestore(String uid) async {
   try {
     final connectivityResult = await Connectivity().checkConnectivity();
     if (connectivityResult == ConnectivityResult.none) {
-      print('⚠️ No internet, token save deferred');
+      Logger.e('⚠️ No internet, token save deferred');
       return;
     }
 
@@ -49,10 +49,10 @@ Future<void> saveTokenToFirestore(String uid) async {
         'fcmToken': token,
         'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
       });
-      print('FCM Token saved: $token');
+      Logger.d('FCM Token saved: $token');
     }
   } catch (e) {
-    print('Error saving FCM token: $e');
+    Logger.d('Error saving FCM token: $e');
   }
 }
 
@@ -69,15 +69,15 @@ Future<void> requestNotificationPermission() async {
     );
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      print('✅ User granted notification permission');
+      Logger.d('✅ User granted notification permission');
     } else if (settings.authorizationStatus ==
         AuthorizationStatus.provisional) {
-      print('⚠️ User granted provisional permission');
+      Logger.d('⚠️ User granted provisional permission');
     } else {
-      print('❌ User declined notification permission');
+      Logger.d('❌ User declined notification permission');
     }
   } catch (e) {
-    print('Error requesting notification permission: $e');
+    Logger.d('Error requesting notification permission: $e');
   }
 }
 
@@ -97,7 +97,7 @@ Future<void> initializeLocalNotifications() async {
   await flutterLocalNotificationsPlugin.initialize(
     initSettings,
     onDidReceiveNotificationResponse: (NotificationResponse response) {
-      print('Notification clicked: ${response.payload}');
+      Logger.d('Notification clicked: ${response.payload}');
     },
   );
 }
@@ -109,15 +109,15 @@ Future<void> enableFirestoreOfflineMode() async {
         persistenceEnabled: true,
         cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
       );
-      print('✅ Firestore offline mode enabled');
+      Logger.d('✅ Firestore offline mode enabled');
     } else {
       await FirebaseFirestore.instance.enablePersistence(
         const PersistenceSettings(synchronizeTabs: true),
       );
-      print('✅ Firestore web persistence enabled');
+      Logger.d('✅ Firestore web persistence enabled');
     }
   } catch (e) {
-    print('⚠️ Firestore persistence error: $e');
+    Logger.d('⚠️ Firestore persistence error: $e');
   }
 }
 
@@ -128,15 +128,15 @@ void main() async {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    print('✅ Firebase initialized');
+    Logger.d('✅ Firebase initialized');
 
     await enableFirestoreOfflineMode();
 
     tz.initializeTimeZones();
-    print('✅ Timezone initialized');
+    Logger.d('✅ Timezone initialized');
 
     await initializeLocalNotifications();
-    print('✅ Local notifications initialized');
+    Logger.d('✅ Local notifications initialized');
 
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
@@ -150,11 +150,11 @@ void main() async {
     await Hive.openBox('userProfileBox');
     await Hive.openBox('syncQueueBox');
     await Hive.openBox<Map>('latestScansCache'); // ✅ ADD THIS LINE
-    print('✅ Hive initialized with all boxes');
+    Logger.d('✅ Hive initialized with all boxes');
 
     // ✅ ADD THIS:  Initialize LatestScanCache
     await LatestScanCache.initialize();
-    print('✅ LatestScanCache initialized');
+    Logger.d('✅ LatestScanCache initialized');
 
     runApp(
       MultiProvider(
@@ -167,8 +167,7 @@ void main() async {
       ),
     );
   } catch (e, stackTrace) {
-    print('❌ Error during initialization: $e');
-    print(stackTrace);
+    Logger.e('❌ Error during initialization: $e', stackTrace);
 
     runApp(
       MaterialApp(
@@ -219,10 +218,10 @@ class ConnectivityProvider extends ChangeNotifier {
       _isOnline = result != ConnectivityResult.none;
 
       if (!wasOnline && _isOnline) {
-        print('🌐 Back online - syncing data...');
+        Logger.d('🌐 Back online - syncing data...');
         _syncPendingData();
       } else if (wasOnline && !_isOnline) {
-        print('📴 Gone offline');
+        Logger.d('📴 Gone offline');
       }
 
       notifyListeners();
@@ -232,9 +231,9 @@ class ConnectivityProvider extends ChangeNotifier {
   Future<void> _syncPendingData() async {
     try {
       await OfflineSyncService().syncAllPendingData();
-      print('✅ All pending data synced via OfflineSyncService');
+      Logger.d('✅ All pending data synced via OfflineSyncService');
     } catch (e) {
-      print('❌ Error syncing data: $e');
+      Logger.d('❌ Error syncing data: $e');
     }
   }
 }
@@ -261,7 +260,8 @@ class _MyAppState extends State<MyApp> {
 
   void _setupForegroundNotifications() {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print('📩 Foreground message received: ${message.notification?.title}');
+      Logger.d(
+          '📩 Foreground message received: ${message.notification?.title}');
 
       if (message.notification != null) {
         flutterLocalNotificationsPlugin.show(
@@ -291,9 +291,9 @@ class _MyAppState extends State<MyApp> {
       final user = FirebaseAuth.instance.currentUser;
       final isAuthenticated = user != null;
 
-      print('🔍 hasSeenWelcome: ${prefs.getBool('hasSeenWelcome')}');
-      print('🔍 Current User: ${user?.email ?? "No user"}');
-      print('🔍 isAuthenticated: $isAuthenticated');
+      Logger.d('🔍 hasSeenWelcome: ${prefs.getBool('hasSeenWelcome')}');
+      Logger.d('🔍 Current User: ${user?.email ?? "No user"}');
+      Logger.d('🔍 isAuthenticated: $isAuthenticated');
 
       final clinicBox = await Hive.openBox('clinicsBox');
       final clinics = clinicBox.get('clinics', defaultValue: []);
@@ -313,7 +313,7 @@ class _MyAppState extends State<MyApp> {
           },
         ];
         await clinicBox.put('clinics', defaultClinics);
-        print('✅ Default clinics initialized');
+        Logger.d('✅ Default clinics initialized');
       }
 
       final connectivityResult = await Connectivity().checkConnectivity();
@@ -326,7 +326,7 @@ class _MyAppState extends State<MyApp> {
       }
 
       bool needsProfile = false;
-      if (isAuthenticated && user != null) {
+      if (isAuthenticated) {
         try {
           final userDoc = await FirebaseFirestore.instance
               .collection('users')
@@ -334,12 +334,12 @@ class _MyAppState extends State<MyApp> {
               .get();
           if (!userDoc.exists) {
             needsProfile = true;
-            print('ℹ️ Authenticated user requires profile completion');
+            Logger.d('ℹ️ Authenticated user requires profile completion');
           } else {
             needsProfile = false;
           }
         } catch (e) {
-          print('Error checking user profile existence: $e');
+          Logger.d('Error checking user profile existence: $e');
           needsProfile = false;
         }
       }
@@ -351,7 +351,7 @@ class _MyAppState extends State<MyApp> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Error during initialization: $e');
+      Logger.d('Error during initialization: $e');
       setState(() {
         _isLoading = false;
       });
@@ -386,11 +386,11 @@ class _MyAppState extends State<MyApp> {
         );
       }
 
-      print('✅ User authenticated - showing HomeScreen');
+      Logger.d('✅ User authenticated - showing HomeScreen');
       return const HomeScreen();
     } else {
       if (!_hasSeenWelcome) {
-        print('📖 Showing WelcomeScreen');
+        Logger.d('📖 Showing WelcomeScreen');
         return WelcomeScreen(
           onSkip: () async {
             await _markWelcomeSeen();
@@ -398,7 +398,7 @@ class _MyAppState extends State<MyApp> {
           },
         );
       } else {
-        print('🔐 Showing LoginScreen');
+        Logger.d('🔐 Showing LoginScreen');
         return const LoginScreen();
       }
     }

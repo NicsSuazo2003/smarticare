@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../data/models/bhw_patient_model.dart';
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class BHWPatientProvider extends ChangeNotifier {
   // ========== DATA STORAGE ==========
@@ -80,7 +81,7 @@ class BHWPatientProvider extends ChangeNotifier {
       _errorMessage = null;
     } catch (e) {
       _errorMessage = 'Failed to initialize: $e';
-      print('BHWPatientProvider initialization error: $e');
+      Logger.d('BHWPatientProvider initialization error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -105,16 +106,14 @@ class BHWPatientProvider extends ChangeNotifier {
         }
       }
     } catch (e) {
-      print('Error loading BHW info: $e');
+      Logger.d('Error loading BHW info: $e');
     }
   }
 
   // ========== LOAD FROM HIVE (OFFLINE) ==========
   Future<void> loadPatientsFromHive() async {
     try {
-      if (_bhwPatientsBox == null) {
-        _bhwPatientsBox = await Hive.openBox<BHWPatient>('bhwPatientsBox');
-      }
+      _bhwPatientsBox ??= await Hive.openBox<BHWPatient>('bhwPatientsBox');
 
       _patients = _bhwPatientsBox!.values.toList();
 
@@ -124,7 +123,7 @@ class BHWPatientProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to load patients: $e';
-      print('Error loading from Hive: $e');
+      Logger.d('Error loading from Hive: $e');
     }
   }
 
@@ -158,7 +157,7 @@ class BHWPatientProvider extends ChangeNotifier {
       return patient.id;
     } catch (e) {
       _errorMessage = 'Failed to add patient: $e';
-      print('Error adding patient: $e');
+      Logger.d('Error adding patient: $e');
       rethrow;
     } finally {
       _isLoading = false;
@@ -187,7 +186,7 @@ class BHWPatientProvider extends ChangeNotifier {
       _syncPatientToFirestore(patient);
     } catch (e) {
       _errorMessage = 'Failed to update patient: $e';
-      print('Error updating patient: $e');
+      Logger.d('Error updating patient: $e');
     }
   }
 
@@ -213,7 +212,7 @@ class BHWPatientProvider extends ChangeNotifier {
       }
     } catch (e) {
       _errorMessage = 'Failed to delete patient: $e';
-      print('Error deleting patient: $e');
+      Logger.d('Error deleting patient: $e');
     }
   }
 
@@ -263,9 +262,9 @@ class BHWPatientProvider extends ChangeNotifier {
         notifyListeners();
       }
 
-      print('✅ Patient synced to Firestore: ${patient.id}');
+      Logger.d('✅ Patient synced to Firestore: ${patient.id}');
     } catch (e) {
-      print('❌ Failed to sync patient to Firestore: $e');
+      Logger.d('❌ Failed to sync patient to Firestore: $e');
       // Don't throw - allow offline operation
     }
   }
@@ -286,7 +285,7 @@ class BHWPatientProvider extends ChangeNotifier {
 
       return downloadUrl;
     } catch (e) {
-      print('Error uploading scan image: $e');
+      Logger.d('Error uploading scan image: $e');
       return null;
     }
   }
@@ -306,7 +305,7 @@ class BHWPatientProvider extends ChangeNotifier {
       _errorMessage = null;
     } catch (e) {
       _errorMessage = 'Failed to sync patients: $e';
-      print('Error syncing all patients: $e');
+      Logger.d('Error syncing all patients: $e');
     } finally {
       _isLoading = false;
       notifyListeners();

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -23,6 +22,7 @@ import 'package:provider/provider.dart';
 import '../../auth/providers/user_session_provider.dart';
 import 'package:image/image.dart' as img;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class EyeScanScreen extends StatefulWidget {
   final double symptomScore;
@@ -85,7 +85,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
       // Delete the temp file
       await imageFile.delete();
     } catch (e) {
-      print('Error checking lighting: $e');
+      Logger.d('Error checking lighting: $e');
     }
   }
 
@@ -166,10 +166,10 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
       try {
         _cameras = await availableCameras();
       } catch (e) {
-        print('Error fetching cameras: $e');
+        Logger.d('Error fetching cameras: $e');
       }
       if (_cameras.isEmpty) {
-        print('No cameras found');
+        Logger.d('No cameras found');
         return;
       }
     }
@@ -218,7 +218,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
         _checkLighting(); // Regular checks
       });
     } on CameraException catch (e) {
-      print('Error initializing camera: ${e.description}');
+      Logger.d('Error initializing camera: ${e.description}');
     }
   }
 
@@ -274,19 +274,19 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
       );
 
       
-      print('🔵 _captureImage: _selectedEye = $_selectedEye');
+      Logger.d('🔵 _captureImage: _selectedEye = $_selectedEye');
       if (_selectedEye == 'Left Eye') {
         await LatestScanCache.updateLeftEye(
             result['predictedClass'], computedHealthScore);
-        print(
+        Logger.d(
             ' Updated LEFT eye cache:  ${result['predictedClass']}, $computedHealthScore%');
       } else {
         await LatestScanCache.updateRightEye(
             result['predictedClass'], computedHealthScore);
-        print(
+        Logger.d(
             'Updated RIGHT eye cache: ${result['predictedClass']}, $computedHealthScore%');
       }
-      print(
+      Logger.d(
           '🔵 Cache status - Left:  ${LatestScanCache.leftEyePrediction} (${LatestScanCache.leftEyeHealthScore}%), Right: ${LatestScanCache.rightEyePrediction} (${LatestScanCache.rightEyeHealthScore}%)');
 
       final isGuest =
@@ -331,9 +331,9 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                     savedImageUrl.startsWith(
                         'https://firebasestorage.googleapis.com/')) {
                   imageUrl = savedImageUrl;
-                  print(' Confirmed Storage URL: $imageUrl');
+                  Logger.d(' Confirmed Storage URL: $imageUrl');
                 } else {
-                  print(
+                  Logger.d(
                       'ERROR:  Saved URL is not a Storage URL:  $savedImageUrl');
                   throw Exception('Image not properly uploaded to Storage');
                 }
@@ -341,11 +341,11 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                 throw Exception('Scan document not found in Firestore');
               }
             } catch (e) {
-              print(' Online save failed: $e');
-              throw e;
+              Logger.d(' Online save failed: $e');
+              rethrow;
             }
           } else {
-            print('Offline - saving to offline queue');
+            Logger.d('Offline - saving to offline queue');
             try {
               await OfflineSyncService().saveScanOffline({
                 'scanId': scanId,
@@ -360,14 +360,14 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                 'timestamp': DateTime.now().toUtc().toIso8601String(),
               });
               imageUrl = croppedImage.path;
-              print(' Scan saved offline:  $scanId');
+              Logger.d(' Scan saved offline:  $scanId');
             } catch (e) {
-              print(' Error saving scan offline: $e');
+              Logger.d(' Error saving scan offline: $e');
               imageUrl = croppedImage.path;
             }
           }
         } catch (e) {
-          print(' Failed to save scan:  $e');
+          Logger.d(' Failed to save scan:  $e');
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -402,7 +402,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
         );
       }
     } catch (e) {
-      print('❌ Error capturing image: $e');
+      Logger.d('❌ Error capturing image: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -549,12 +549,12 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
         }
 
         try {
-          print('Selected image path: ${croppedImage.path}');
-          print('File exists: ${await croppedImage.exists()}');
-          print('File size: ${await croppedImage.length()} bytes');
+          Logger.d('Selected image path: ${croppedImage.path}');
+          Logger.d('File exists: ${await croppedImage.exists()}');
+          Logger.d('File size: ${await croppedImage.length()} bytes');
 
           final result = await CataractModel.predict(croppedImage);
-          print(
+          Logger.d(
               'Prediction result: ${result['predictedClass']}, confidence: ${result['confidence']}');
 
 
@@ -567,16 +567,16 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
           );
 
 
-          print('🔵 _captureImage: _selectedEye = $_selectedEye');
+          Logger.d('🔵 _captureImage: _selectedEye = $_selectedEye');
           if (_selectedEye == 'Left Eye') {
             await LatestScanCache.updateLeftEye(
                 result['predictedClass'], computedHealthScore);
-            print(
+            Logger.d(
                 ' Updated LEFT eye cache:   ${result['predictedClass']}, $computedHealthScore%');
           } else {
             await LatestScanCache.updateRightEye(
                 result['predictedClass'], computedHealthScore);
-            print(
+            Logger.d(
                 'Updated RIGHT eye cache:  ${result['predictedClass']}, $computedHealthScore%');
           }
 
@@ -636,9 +636,9 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                       savedImageUrl.startsWith(
                           'https://firebasestorage.googleapis.com/')) {
                     imageUrl = savedImageUrl;
-                    print('✅ Storage URL confirmed: $imageUrl');
+                    Logger.d('✅ Storage URL confirmed: $imageUrl');
                   } else {
-                    print(
+                    Logger.d(
                         '⚠️ WARNING: URL is not a Storage URL: $savedImageUrl');
                     throw Exception('Image not properly uploaded to Storage');
                   }
@@ -646,7 +646,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                   throw Exception('Scan document not found in Firestore');
                 }
               } catch (e) {
-                print('⚠️ Failed to save scan online: $e');
+                Logger.d('⚠️ Failed to save scan online: $e');
 
                 // Show error instead of silent fallback
                 if (mounted) {
@@ -661,7 +661,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                 rethrow;
               }
             } else {
-              print(
+              Logger.d(
                   '📴 Offline - saving scan to offline queue and using local image path');
               try {
                 await OfflineSyncService().saveScanOffline({
@@ -678,9 +678,9 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
                   'timestamp': DateTime.now().toUtc().toIso8601String(),
                 });
                 imageUrl = croppedImage.path;
-                print('✅ Scan saved offline: $scanId');
+                Logger.d('✅ Scan saved offline: $scanId');
               } catch (e) {
-                print('❌ Error saving scan offline: $e');
+                Logger.d('❌ Error saving scan offline: $e');
                 imageUrl = croppedImage.path; // Still use local path
               }
             }
@@ -706,7 +706,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
             );
           }
         } catch (e) {
-          print('Error processing image: $e');
+          Logger.d('Error processing image: $e');
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -725,7 +725,7 @@ class _EyeScanScreenState extends State<EyeScanScreen> {
         }
       }
     } catch (e) {
-      print('Error picking image: $e');
+      Logger.d('Error picking image: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error selecting image: $e')),

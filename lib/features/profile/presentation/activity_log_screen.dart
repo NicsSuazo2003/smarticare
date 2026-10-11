@@ -6,6 +6,7 @@ import 'progress_screen.dart';
 import '../../reminders/presentation/reminder_screen.dart';
 import 'profile_screen.dart';
 import '../../symptom_assessment/presentation/symptom_assessment_screen.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class ActivityLogScreen extends StatefulWidget {
   const ActivityLogScreen({super.key});
@@ -45,7 +46,7 @@ class _ActivityLogScreenState extends State<ActivityLogScreen> {
           .orderBy('timestamp', descending: true)
           .get();
 
-      print('Fetched ${snapshot.docs.length} logs for userId=${user.uid}');
+      Logger.d('Fetched ${snapshot.docs.length} logs for userId=${user.uid}');
 
       final mapped = snapshot.docs.map((doc) {
         final data = doc.data();
@@ -141,8 +142,8 @@ class _ActivityLogScreenState extends State<ActivityLogScreen> {
         _loading = false;
       });
     } catch (e, stack) {
-      print('Error fetching activities: $e');
-      print(stack);
+    } catch (e, stack) {
+      Logger.e('Error fetching activities: $e', stack);
       setState(() {
         _activities = [];
         _loading = false;

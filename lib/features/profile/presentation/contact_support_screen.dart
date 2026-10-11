@@ -4,6 +4,7 @@ import 'progress_screen.dart';
 import '../../reminders/presentation/reminder_screen.dart';
 import 'profile_screen.dart';
 import '../../symptom_assessment/presentation/symptom_assessment_screen.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class ContactSupportScreen extends StatefulWidget {
   const ContactSupportScreen({super.key});
@@ -153,11 +154,11 @@ class _ContactSupportScreenState extends State<ContactSupportScreen> {
       );
 
       // Log the support request (optional)
-      print('Support Request Submitted:');
-      print('Name: $name');
-      print('Email: $email');
-      print('Issue Type: $_selectedIssueType');
-      print('Message: $message');
+      Logger.d('Support Request Submitted:');
+      Logger.d('Name: $name');
+      Logger.d('Email: $email');
+      Logger.d('Issue Type: $_selectedIssueType');
+      Logger.d('Message: $message');
     });
   }
 

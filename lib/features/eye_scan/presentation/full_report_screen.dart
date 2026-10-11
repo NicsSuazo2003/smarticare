@@ -8,10 +8,8 @@ import 'package:flutter_application_1/services/ml/staging_service.dart';
 import 'dart:math';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
-import '../../../features/clinics/presentation/find_clinics_screen.dart';
-import '../../../features/reminders/presentation/reminder_screen.dart';
 
 class FullReportScreen extends StatefulWidget {
   final String? scanId;
@@ -50,7 +48,7 @@ class _FullReportScreenState extends State<FullReportScreen> {
 
       return age;
     } catch (e) {
-      print('Error parsing birth date: $e');
+      Logger.d('Error parsing birth date: $e');
       return null;
     }
   }

@@ -789,7 +789,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
-                        value: selectedGender,
+                        initialValue: selectedGender,
                         decoration: const InputDecoration(
                           border: OutlineInputBorder(),
                         ),

@@ -1,4 +1,5 @@
 import 'package:hive/hive.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class LatestScanCache {
   static const String _boxName = 'latestScansCache';
@@ -9,9 +10,9 @@ class LatestScanCache {
   static Future<void> initialize() async {
     try {
       _cacheBox = await Hive.openBox<Map>(_boxName);
-      print('✅ LatestScanCache initialized with Hive');
+      Logger.d('✅ LatestScanCache initialized with Hive');
     } catch (e) {
-      print('❌ Error initializing LatestScanCache: $e');
+      Logger.d('❌ Error initializing LatestScanCache: $e');
       rethrow;
     }
   }
@@ -22,7 +23,7 @@ class LatestScanCache {
       final data = _cacheBox.get('leftEye');
       return (data?['prediction'] as String?) ?? '';
     } catch (e) {
-      print('⚠️ Error reading leftEyePrediction:  $e');
+      Logger.d('⚠️ Error reading leftEyePrediction:  $e');
       return '';
     }
   }
@@ -33,7 +34,7 @@ class LatestScanCache {
       final data = _cacheBox.get('leftEye');
       return (data?['healthScore'] as double?) ?? 0.0;
     } catch (e) {
-      print('⚠️ Error reading leftEyeHealthScore: $e');
+      Logger.d('⚠️ Error reading leftEyeHealthScore: $e');
       return 0.0;
     }
   }
@@ -44,7 +45,7 @@ class LatestScanCache {
       final data = _cacheBox.get('rightEye');
       return (data?['prediction'] as String?) ?? '';
     } catch (e) {
-      print('⚠️ Error reading rightEyePrediction: $e');
+      Logger.d('⚠️ Error reading rightEyePrediction: $e');
       return '';
     }
   }
@@ -55,7 +56,7 @@ class LatestScanCache {
       final data = _cacheBox.get('rightEye');
       return (data?['healthScore'] as double?) ?? 0.0;
     } catch (e) {
-      print('⚠️ Error reading rightEyeHealthScore:  $e');
+      Logger.d('⚠️ Error reading rightEyeHealthScore:  $e');
       return 0.0;
     }
   }
@@ -69,10 +70,10 @@ class LatestScanCache {
         'healthScore': healthScore,
         'updatedAt': DateTime.now().toIso8601String(),
       });
-      print(
+      Logger.d(
           '✅ Cache updated - Left eye: $prediction, Health: ${healthScore.toStringAsFixed(1)}%');
     } catch (e) {
-      print('❌ Error updating leftEye cache: $e');
+      Logger.d('❌ Error updating leftEye cache: $e');
     }
   }
 
@@ -85,10 +86,10 @@ class LatestScanCache {
         'healthScore': healthScore,
         'updatedAt': DateTime.now().toIso8601String(),
       });
-      print(
+      Logger.d(
           '✅ Cache updated - Right eye: $prediction, Health:  ${healthScore.toStringAsFixed(1)}%');
     } catch (e) {
-      print('❌ Error updating rightEye cache: $e');
+      Logger.d('❌ Error updating rightEye cache: $e');
     }
   }
 
@@ -100,7 +101,7 @@ class LatestScanCache {
       final prediction = (data?['prediction'] as String?) ?? '';
       return prediction.isNotEmpty;
     } catch (e) {
-      print('⚠️ Error checking hasEyeData: $e');
+      Logger.d('⚠️ Error checking hasEyeData: $e');
       return false;
     }
   }
@@ -128,7 +129,7 @@ class LatestScanCache {
         },
       };
     } catch (e) {
-      print('⚠️ Error getting cache status: $e');
+      Logger.d('⚠️ Error getting cache status: $e');
       return {};
     }
   }
@@ -138,17 +139,17 @@ class LatestScanCache {
     try {
       await _cacheBox.delete('leftEye');
       await _cacheBox.delete('rightEye');
-      print('🗑️ Cache cleared');
+      Logger.d('🗑️ Cache cleared');
     } catch (e) {
-      print('❌ Error clearing cache: $e');
+      Logger.d('❌ Error clearing cache: $e');
     }
   }
 
   // ✅ NEW: Print cache for debugging
   static void debugPrintCache() {
     final status = getCacheStatus();
-    print('\n📦 CACHE STATUS:');
-    print('Left Eye: ${status['leftEye']}');
-    print('Right Eye: ${status['rightEye']}\n');
+    Logger.d('\n📦 CACHE STATUS:');
+    Logger.d('Left Eye: ${status['leftEye']}');
+    Logger.d('Right Eye: ${status['rightEye']}\n');
   }
 }

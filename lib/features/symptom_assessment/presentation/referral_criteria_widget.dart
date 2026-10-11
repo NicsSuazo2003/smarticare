@@ -9,13 +9,13 @@ class ReferralCriteriaCard extends StatelessWidget {
   final String stage;
 
   const ReferralCriteriaCard({
-    Key? key,
+    super.key,
     required this.prediction,
     required this.healthScore,
     required this.symptomScore,
     required this.confidence,
     required this.stage,
-  }) : super(key: key);
+  });
 
   /// Define the official referral trigger thresholds
   static const double HEALTH_SCORE_THRESHOLD = 60.0;
@@ -169,7 +169,7 @@ class ReferralCriteriaCard extends StatelessWidget {
                       ],
                     ),
                   ))
-              .toList(),
+              ,
 
           const Divider(height: 24),
 

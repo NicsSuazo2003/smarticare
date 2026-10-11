@@ -10,9 +10,9 @@ class BHWResultSlipScreen extends StatefulWidget {
   final BHWPatient patient;
 
   const BHWResultSlipScreen({
-    Key? key,
+    super.key,
     required this.patient,
-  }) : super(key: key);
+  });
 
   @override
   State<BHWResultSlipScreen> createState() => _BHWResultSlipScreenState();

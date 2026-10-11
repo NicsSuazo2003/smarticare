@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'symptom_assessment_q1_screen.dart'; // Import the Q1 screen
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class SymptomAssessmentScreen extends StatefulWidget {
   const SymptomAssessmentScreen({super.key, required Null Function() onStart});
@@ -58,7 +59,7 @@ class _SymptomAssessmentScreenState extends State<SymptomAssessmentScreen>
         builder: (context) => SymptomAssessmentQ1Screen(
           onAnswer: (answer) {
             // Store the answer in your application state or a provider
-            print('User selected: $answer');
+            Logger.d('User selected: $answer');
 
             // In a real app, you would save this answer to your state management solution
             // For example:

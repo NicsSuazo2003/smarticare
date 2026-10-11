@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_1/features/symptom_assessment/services/scoring_service.dart';
 import 'package:flutter_application_1/services/ml/staging_service.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 /// ONE-TIME MIGRATION SCRIPT
 /// Run this once to update all legacy scans with enhanced staging data
@@ -10,10 +11,10 @@ class OneTimeScanMigration {
 
   /// Main migration function - Run this once
   static Future<void> runOneTimeMigration() async {
-    print('🚀 ========================================');
-    print('🚀 STARTING ONE-TIME SCAN MIGRATION');
-    print('🚀 Date: 2025-11-15 10:11:32 UTC');
-    print('🚀 ========================================\n');
+    Logger.d('🚀 ========================================');
+    Logger.d('🚀 STARTING ONE-TIME SCAN MIGRATION');
+    Logger.d('🚀 Date: 2025-11-15 10:11:32 UTC');
+    Logger.d('🚀 ========================================\n');
 
     final startTime = DateTime.now();
     int totalUsers = 0;
@@ -24,10 +25,10 @@ class OneTimeScanMigration {
 
     try {
       // Step 1: Get all users
-      print('📋 Step 1: Fetching all users...');
+      Logger.d('📋 Step 1: Fetching all users...');
       final usersSnapshot = await _firestore.collection('users').get();
       totalUsers = usersSnapshot.docs.length;
-      print('✅ Found $totalUsers users\n');
+      Logger.d('✅ Found $totalUsers users\n');
 
       // Step 2: Process each user
       int currentUser = 0;
@@ -38,7 +39,7 @@ class OneTimeScanMigration {
         final userName =
             userData['firstName'] ?? userData['username'] ?? 'Unknown';
 
-        print(
+        Logger.d(
             '👤 [$currentUser/$totalUsers] Processing user: $userName ($userId)');
 
         try {
@@ -53,11 +54,11 @@ class OneTimeScanMigration {
           totalScans += userScanCount;
 
           if (userScanCount == 0) {
-            print('   ℹ️  No scans found - skipping\n');
+            Logger.d('   ℹ️  No scans found - skipping\n');
             continue;
           }
 
-          print('   📊 Found $userScanCount scans');
+          Logger.d('   📊 Found $userScanCount scans');
 
           // Process each scan
           int userEnhanced = 0;
@@ -125,22 +126,22 @@ class OneTimeScanMigration {
               userEnhanced++;
               scansEnhanced++;
 
-              print(
+              Logger.d(
                   '      ✅ $eye | $scanDate | $stage | ${healthScore.round()}% | $riskLevel');
             } catch (e) {
               userErrored++;
               scansErrored++;
-              print('      ❌ Error processing scan $scanId: $e');
+              Logger.d('      ❌ Error processing scan $scanId: $e');
             }
           }
 
           // User summary
-          print('   📈 User summary:');
-          print('      Enhanced: $userEnhanced');
-          print('      Skipped: $userSkipped');
-          print('      Errors: $userErrored\n');
+          Logger.d('   📈 User summary:');
+          Logger.d('      Enhanced: $userEnhanced');
+          Logger.d('      Skipped: $userSkipped');
+          Logger.d('      Errors: $userErrored\n');
         } catch (e) {
-          print('   ❌ Error processing user $userId: $e\n');
+          Logger.d('   ❌ Error processing user $userId: $e\n');
           scansErrored++;
         }
       }
@@ -149,19 +150,19 @@ class OneTimeScanMigration {
       final endTime = DateTime.now();
       final duration = endTime.difference(startTime);
 
-      print('');
-      print('🎉 ========================================');
-      print('🎉 MIGRATION COMPLETED SUCCESSFULLY');
-      print('🎉 ========================================');
-      print('📊 Final Statistics:');
-      print('   Total Users: $totalUsers');
-      print('   Total Scans: $totalScans');
-      print('   ✅ Enhanced: $scansEnhanced');
-      print('   ⏭️  Skipped: $scansSkipped');
-      print('   ❌ Errors: $scansErrored');
-      print(
+      Logger.d('');
+      Logger.d('🎉 ========================================');
+      Logger.d('🎉 MIGRATION COMPLETED SUCCESSFULLY');
+      Logger.d('🎉 ========================================');
+      Logger.d('📊 Final Statistics:');
+      Logger.d('   Total Users: $totalUsers');
+      Logger.d('   Total Scans: $totalScans');
+      Logger.d('   ✅ Enhanced: $scansEnhanced');
+      Logger.d('   ⏭️  Skipped: $scansSkipped');
+      Logger.d('   ❌ Errors: $scansErrored');
+      Logger.d(
           '   ⏱️  Duration: ${duration.inMinutes}m ${duration.inSeconds % 60}s');
-      print('🎉 ========================================\n');
+      Logger.d('🎉 ========================================\n');
 
       // Create admin notification
       await _createAdminNotification(
@@ -173,12 +174,12 @@ class OneTimeScanMigration {
         duration: duration,
       );
     } catch (e) {
-      print('');
-      print('❌ ========================================');
-      print('❌ MIGRATION FAILED');
-      print('❌ ========================================');
-      print('Error: $e');
-      print('❌ ========================================\n');
+      Logger.d('');
+      Logger.d('❌ ========================================');
+      Logger.d('❌ MIGRATION FAILED');
+      Logger.d('❌ ========================================');
+      Logger.d('Error: $e');
+      Logger.d('❌ ========================================\n');
 
       // Create error notification
       await _createErrorNotification(e.toString());
@@ -222,7 +223,7 @@ class OneTimeScanMigration {
         },
       });
     } catch (e) {
-      print('⚠️ Failed to create admin notification: $e');
+      Logger.d('⚠️ Failed to create admin notification: $e');
     }
   }
 
@@ -239,7 +240,7 @@ class OneTimeScanMigration {
         'isRead': false,
       });
     } catch (e) {
-      print('⚠️ Failed to create error notification: $e');
+      Logger.d('⚠️ Failed to create error notification: $e');
     }
   }
 }

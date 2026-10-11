@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class OTPService {
   static const int OTP_LENGTH = 6;
@@ -29,9 +30,9 @@ class OTPService {
         'attempts': 0,
       });
 
-      print('✅ OTP stored for $email');
+      Logger.d('✅ OTP stored for $email');
     } catch (e) {
-      print('❌ Error storing OTP: $e');
+      Logger.d('❌ Error storing OTP: $e');
       rethrow;
     }
   }
@@ -48,7 +49,7 @@ class OTPService {
           .get();
 
       if (!doc.exists) {
-        print('❌ No OTP found for $email');
+        Logger.d('❌ No OTP found for $email');
         return false;
       }
 
@@ -60,20 +61,20 @@ class OTPService {
 
       // Check if already verified
       if (verified) {
-        print('⚠️ OTP already used');
+        Logger.d('⚠️ OTP already used');
         return false;
       }
 
       // Check if expired
       if (DateTime.now().isAfter(expiresAt)) {
-        print('⚠️ OTP expired');
+        Logger.d('⚠️ OTP expired');
         await doc.reference.delete();
         return false;
       }
 
       // Check attempts limit (max 3 attempts)
       if (attempts >= 3) {
-        print('⚠️ Too many OTP attempts');
+        Logger.d('⚠️ Too many OTP attempts');
         await doc.reference.delete();
         return false;
       }
@@ -91,18 +92,18 @@ class OTPService {
           await doc.reference.delete();
         });
 
-        print('✅ OTP verified successfully');
+        Logger.d('✅ OTP verified successfully');
         return true;
       } else {
         // Increment attempts
         await doc.reference.update({
           'attempts': attempts + 1,
         });
-        print('❌ Invalid OTP');
+        Logger.d('❌ Invalid OTP');
         return false;
       }
     } catch (e) {
-      print('❌ Error verifying OTP: $e');
+      Logger.d('❌ Error verifying OTP: $e');
       return false;
     }
   }
@@ -134,10 +135,10 @@ SmartiCare Security Team
         'otp': otp, // For debugging/testing only - remove in production
       });
 
-      print('✅ OTP email queued for $email');
+      Logger.d('✅ OTP email queued for $email');
       return true;
     } catch (e) {
-      print('❌ Error sending OTP email: $e');
+      Logger.d('❌ Error sending OTP email: $e');
       return false;
     }
   }
@@ -150,7 +151,7 @@ SmartiCare Security Team
       final sent = await sendOTPEmail(email: email, otp: otp);
       return sent;
     } catch (e) {
-      print('❌ Error in sendOTP: $e');
+      Logger.d('❌ Error in sendOTP: $e');
       return false;
     }
   }
@@ -170,9 +171,9 @@ SmartiCare Security Team
       }
       await batch.commit();
 
-      print('✅ Cleaned up ${snapshot.docs.length} expired OTPs');
+      Logger.d('✅ Cleaned up ${snapshot.docs.length} expired OTPs');
     } catch (e) {
-      print('❌ Error cleaning up OTPs: $e');
+      Logger.d('❌ Error cleaning up OTPs: $e');
     }
   }
 }

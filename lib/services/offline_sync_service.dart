@@ -4,6 +4,7 @@ import 'package:hive/hive.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class OfflineSyncService {
   static final OfflineSyncService _instance = OfflineSyncService._internal();
@@ -29,7 +30,7 @@ class OfflineSyncService {
 
       final scanId = hiveCompatibleScanData['scanId'];
       if (scanId == null || scanId.toString().isEmpty) {
-        print('⚠️ Cannot save scan: scanId is null or empty');
+        Logger.d('⚠️ Cannot save scan: scanId is null or empty');
         return;
       }
 
@@ -43,10 +44,10 @@ class OfflineSyncService {
         'retryCount': 0,
       });
 
-      print('✅ Scan saved offline: $scanId');
-      print('📁 Image path: ${hiveCompatibleScanData['imageUrl']}');
+      Logger.d('✅ Scan saved offline: $scanId');
+      Logger.d('📁 Image path: ${hiveCompatibleScanData['imageUrl']}');
     } catch (e) {
-      print('❌ Error saving scan offline: $e');
+      Logger.d('❌ Error saving scan offline: $e');
       rethrow;
     }
   }
@@ -80,9 +81,9 @@ class OfflineSyncService {
         'retryCount': 0,
       });
 
-      print('✅ Assessment saved offline: $assessmentId');
+      Logger.d('✅ Assessment saved offline: $assessmentId');
     } catch (e) {
-      print('❌ Error saving assessment offline: $e');
+      Logger.d('❌ Error saving assessment offline: $e');
       rethrow;
     }
   }
@@ -93,21 +94,21 @@ class OfflineSyncService {
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
       if (userId == null) {
-        print('❌ Cannot upload: User not logged in');
+        Logger.d('❌ Cannot upload: User not logged in');
         return null;
       }
 
       final imageFile = File(localImagePath);
       if (!await imageFile.exists()) {
-        print('❌ Local image file not found: $localImagePath');
+        Logger.d('❌ Local image file not found: $localImagePath');
         return null;
       }
 
       final fileSize = await imageFile.length();
-      print('📤 Uploading offline image to Firebase Storage...');
-      print('📁 Local path: $localImagePath');
-      print('📁 File size: $fileSize bytes');
-      print('📁 Scan ID: $scanId');
+      Logger.d('📤 Uploading offline image to Firebase Storage...');
+      Logger.d('📁 Local path: $localImagePath');
+      Logger.d('📁 File size: $fileSize bytes');
+      Logger.d('📁 Scan ID: $scanId');
 
       // Create Storage reference
       final ref =
@@ -120,19 +121,19 @@ class OfflineSyncService {
       uploadTask.snapshotEvents.listen((TaskSnapshot snapshot) {
         final progress =
             (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        print('📤 Upload progress: ${progress.toStringAsFixed(1)}%');
+        Logger.d('📤 Upload progress: ${progress.toStringAsFixed(1)}%');
       });
 
       // Wait for upload completion
       final taskSnapshot = await uploadTask;
       final storageUrl = await taskSnapshot.ref.getDownloadURL();
 
-      print('✅ Offline image uploaded successfully!');
-      print('🔗 Storage URL: $storageUrl');
+      Logger.d('✅ Offline image uploaded successfully!');
+      Logger.d('🔗 Storage URL: $storageUrl');
       return storageUrl;
     } catch (e) {
-      print('❌ Error uploading offline image: $e');
-      print('📁 Failed file: $localImagePath');
+      Logger.d('❌ Error uploading offline image: $e');
+      Logger.d('📁 Failed file: $localImagePath');
       return null;
     }
   }
@@ -142,7 +143,7 @@ class OfflineSyncService {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
-        print('⚠️ No user logged in for getAllScans');
+        Logger.d('⚠️ No user logged in for getAllScans');
         return [];
       }
 
@@ -159,7 +160,7 @@ class OfflineSyncService {
             allScans.add(scanMap);
           }
         } catch (e) {
-          print('⚠️ Error reading offline scan $key: $e');
+          Logger.d('⚠️ Error reading offline scan $key: $e');
         }
       }
 
@@ -180,10 +181,10 @@ class OfflineSyncService {
           allScans.add(scanData);
         }
 
-        print(
+        Logger.d(
             '✅ Retrieved ${querySnapshot.docs.length} scans from Firestore cache');
       } catch (e) {
-        print('⚠️ Using offline scans only: $e');
+        Logger.d('⚠️ Using offline scans only: $e');
       }
 
       // Remove duplicates (prefer Firestore version)
@@ -205,10 +206,10 @@ class OfflineSyncService {
         return bTime.compareTo(aTime);
       });
 
-      print('✅ Total scans retrieved: ${result.length}');
+      Logger.d('✅ Total scans retrieved: ${result.length}');
       return result;
     } catch (e) {
-      print('❌ Error in getAllScans: $e');
+      Logger.d('❌ Error in getAllScans: $e');
       return [];
     }
   }
@@ -220,19 +221,19 @@ class OfflineSyncService {
       final user = FirebaseAuth.instance.currentUser;
 
       if (user == null) {
-        print('⚠️ No user logged in, cannot sync');
+        Logger.d('⚠️ No user logged in, cannot sync');
         return;
       }
 
       final totalItems = syncQueue.keys.length;
       if (totalItems == 0) {
-        print('✅ No items to sync');
+        Logger.d('✅ No items to sync');
         return;
       }
 
-      print('🔄 Starting sync of $totalItems items...');
-      print('👤 User: ${user.email} (${user.uid})');
-      print('📅 Sync started: ${DateTime.now().toUtc().toIso8601String()}');
+      Logger.d('🔄 Starting sync of $totalItems items...');
+      Logger.d('👤 User: ${user.email} (${user.uid})');
+      Logger.d('📅 Sync started: ${DateTime.now().toUtc().toIso8601String()}');
 
       int syncedCount = 0;
       int failedCount = 0;
@@ -241,7 +242,7 @@ class OfflineSyncService {
         try {
           final item = syncQueue.get(key);
           if (item == null) {
-            print('⚠️ Sync item $key is null, removing from queue');
+            Logger.d('⚠️ Sync item $key is null, removing from queue');
             await syncQueue.delete(key);
             continue;
           }
@@ -250,7 +251,7 @@ class OfflineSyncService {
           final data = item['data'];
           final retryCount = item['retryCount'] ?? 0;
 
-          print('\n🔄 Syncing $type: $key (attempt ${retryCount + 1})');
+          Logger.d('\n🔄 Syncing $type: $key (attempt ${retryCount + 1})');
 
           if (type == 'scan') {
             await _syncScanData(key, data, user.uid, syncQueue);
@@ -259,11 +260,11 @@ class OfflineSyncService {
             await _syncAssessmentData(key, data, user.uid, syncQueue);
             syncedCount++;
           } else {
-            print('⚠️ Unknown sync type: $type');
+            Logger.d('⚠️ Unknown sync type: $type');
             await syncQueue.delete(key);
           }
         } catch (e) {
-          print('❌ Error syncing item $key: $e');
+          Logger.d('❌ Error syncing item $key: $e');
           failedCount++;
 
           // Update retry count
@@ -274,26 +275,26 @@ class OfflineSyncService {
 
               // Remove from queue after 3 failed attempts
               if (item['retryCount'] >= 3) {
-                print('🗑️ Removing $key after 3 failed attempts');
+                Logger.d('🗑️ Removing $key after 3 failed attempts');
                 await syncQueue.delete(key);
               } else {
                 await syncQueue.put(key, item);
               }
             }
           } catch (retryError) {
-            print('⚠️ Error updating retry count for $key: $retryError');
+            Logger.d('⚠️ Error updating retry count for $key: $retryError');
           }
         }
       }
 
-      print('\n✅ Sync completed:');
-      print('   📊 Total items: $totalItems');
-      print('   ✅ Synced: $syncedCount');
-      print('   ❌ Failed: $failedCount');
-      print('   📤 Remaining in queue: ${syncQueue.keys.length}');
-      print('   📅 Sync finished: ${DateTime.now().toUtc().toIso8601String()}');
+      Logger.d('\n✅ Sync completed:');
+      Logger.d('   📊 Total items: $totalItems');
+      Logger.d('   ✅ Synced: $syncedCount');
+      Logger.d('   ❌ Failed: $failedCount');
+      Logger.d('   📤 Remaining in queue: ${syncQueue.keys.length}');
+      Logger.d('   📅 Sync finished: ${DateTime.now().toUtc().toIso8601String()}');
     } catch (e) {
-      print('❌ Error in syncAllPendingData: $e');
+      Logger.d('❌ Error in syncAllPendingData: $e');
       rethrow;
     }
   }
@@ -305,13 +306,13 @@ class OfflineSyncService {
     final currentImageUrl = onlineData['imageUrl'];
     final scanId = onlineData['scanId'];
 
-    print('🔍 Syncing scan: $scanId');
-    print('📁 Current imageUrl: $currentImageUrl');
+    Logger.d('🔍 Syncing scan: $scanId');
+    Logger.d('📁 Current imageUrl: $currentImageUrl');
 
     // Check if imageUrl is a local path that needs uploading
     if (currentImageUrl != null &&
         currentImageUrl.startsWith('/data/user/0/')) {
-      print('📤 Local image detected, uploading to Firebase Storage...');
+      Logger.d('📤 Local image detected, uploading to Firebase Storage...');
 
       // Upload image to Firebase Storage
       final storageUrl =
@@ -325,17 +326,17 @@ class OfflineSyncService {
         onlineData['syncedAt'] = FieldValue.serverTimestamp();
         onlineData['syncedFrom'] = 'offline';
 
-        print('✅ Image uploaded successfully');
-        print('🔗 New Storage URL: $storageUrl');
+        Logger.d('✅ Image uploaded successfully');
+        Logger.d('🔗 New Storage URL: $storageUrl');
       } else {
-        print('⚠️ Failed to upload image, will keep local path');
+        Logger.d('⚠️ Failed to upload image, will keep local path');
         // Don't fail the entire sync if image upload fails
       }
     } else if (currentImageUrl != null &&
         currentImageUrl.startsWith('https://')) {
-      print('✅ Image already has Storage URL');
+      Logger.d('✅ Image already has Storage URL');
     } else {
-      print('⚠️ Unexpected imageUrl format: $currentImageUrl');
+      Logger.d('⚠️ Unexpected imageUrl format: $currentImageUrl');
     }
 
     // Always recompute healthScore and riskLevel based on the latest data
@@ -382,7 +383,7 @@ class OfflineSyncService {
         .doc(scanId)
         .set(onlineData, SetOptions(merge: true));
 
-    print('✅ Scan data saved to Firestore: $scanId');
+    Logger.d('✅ Scan data saved to Firestore: $scanId');
 
     // Clean up local image file after successful sync (only if we uploaded it)
     if (currentImageUrl != null &&
@@ -392,15 +393,15 @@ class OfflineSyncService {
         final localFile = File(currentImageUrl);
         if (await localFile.exists()) {
           await localFile.delete();
-          print('🗑️ Deleted local image file: $currentImageUrl');
+          Logger.d('🗑️ Deleted local image file: $currentImageUrl');
         }
       } catch (e) {
-        print('⚠️ Could not delete local file: $e');
+        Logger.d('⚠️ Could not delete local file: $e');
       }
     }
 
     await syncQueue.delete(key);
-    print('✅ Removed $key from sync queue');
+    Logger.d('✅ Removed $key from sync queue');
   }
 
   /// Sync individual assessment data
@@ -410,7 +411,7 @@ class OfflineSyncService {
 
     
     if (onlineData['synced'] == true) {
-      print('⚠️ Assessment $key already synced, skipping');
+      Logger.d('⚠️ Assessment $key already synced, skipping');
       await syncQueue.delete(key);
       return;
     }
@@ -426,7 +427,7 @@ class OfflineSyncService {
     onlineData['syncedFrom'] = 'offline';
 
    
-    print('🔄 Syncing assessment from offline queue: $key');
+    Logger.d('🔄 Syncing assessment from offline queue: $key');
 
     try {
       await FirebaseFirestore.instance
@@ -435,13 +436,13 @@ class OfflineSyncService {
           .collection('assessments')
           .add(onlineData);
 
-      print('✅ Assessment synced: $key');
+      Logger.d('✅ Assessment synced: $key');
 
       // ✅ FIX 3: Only delete after successful sync
       await syncQueue.delete(key);
-      print('✅ Removed $key from sync queue');
+      Logger.d('✅ Removed $key from sync queue');
     } catch (e) {
-      print('❌ Failed to sync assessment $key: $e');
+      Logger.d('❌ Failed to sync assessment $key: $e');
       // ✅ FIX 4: Don't delete on failure, let retry happen
       rethrow;
     }
@@ -453,11 +454,11 @@ class OfflineSyncService {
       final syncQueue = await Hive.openBox('syncQueueBox');
       final pendingCount = syncQueue.keys.length;
 
-      print('\n📤 SYNC STATUS CHECK');
-      print('==================');
+      Logger.d('\n📤 SYNC STATUS CHECK');
+      Logger.d('==================');
 
       if (pendingCount > 0) {
-        print('📊 $pendingCount items pending sync');
+        Logger.d('📊 $pendingCount items pending sync');
 
         int scanCount = 0;
         int assessmentCount = 0;
@@ -476,27 +477,27 @@ class OfflineSyncService {
               final isLocal = imageUrl?.startsWith('/data/user/0/') ?? false;
               if (isLocal) localImageCount++;
 
-              print(
+              Logger.d(
                   '   📸 Scan: ${scanData['scanId']} (local image: $isLocal, retries: $retryCount)');
             } else if (type == 'assessment') {
               assessmentCount++;
-              print('   📋 Assessment: $key (retries: $retryCount)');
+              Logger.d('   📋 Assessment: $key (retries: $retryCount)');
             }
           }
         }
 
-        print('\n📊 Summary:');
-        print('   🔹 Scans: $scanCount');
-        print('   🔹 Assessments: $assessmentCount');
-        print('   🔹 Local images: $localImageCount');
+        Logger.d('\n📊 Summary:');
+        Logger.d('   🔹 Scans: $scanCount');
+        Logger.d('   🔹 Assessments: $assessmentCount');
+        Logger.d('   🔹 Local images: $localImageCount');
       } else {
-        print('✅ No items pending sync');
+        Logger.d('✅ No items pending sync');
       }
 
-      print('📅 Check time: ${DateTime.now().toUtc().toIso8601String()}');
-      print('==================\n');
+      Logger.d('📅 Check time: ${DateTime.now().toUtc().toIso8601String()}');
+      Logger.d('==================\n');
     } catch (e) {
-      print('❌ Error checking pending sync: $e');
+      Logger.d('❌ Error checking pending sync: $e');
     }
   }
 
@@ -504,32 +505,32 @@ class OfflineSyncService {
   Future<void> debugPrintQueue() async {
     try {
       final syncQueue = await Hive.openBox('syncQueueBox');
-      print('\n📦 SYNC QUEUE DEBUG');
-      print('===================');
-      print('Total items: ${syncQueue.keys.length}');
+      Logger.d('\n📦 SYNC QUEUE DEBUG');
+      Logger.d('===================');
+      Logger.d('Total items: ${syncQueue.keys.length}');
 
       for (var key in syncQueue.keys) {
         final item = syncQueue.get(key);
         if (item != null) {
-          print('\n🔑 Key: $key');
-          print('   📝 Type: ${item['type']}');
-          print('   🔄 Retry Count: ${item['retryCount'] ?? 0}');
-          print('   📅 Created: ${item['timestamp']}');
+          Logger.d('\n🔑 Key: $key');
+          Logger.d('   📝 Type: ${item['type']}');
+          Logger.d('   🔄 Retry Count: ${item['retryCount'] ?? 0}');
+          Logger.d('   📅 Created: ${item['timestamp']}');
 
           if (item['type'] == 'scan' && item['data'] != null) {
             final scanData = item['data'];
-            print('   📸 Scan ID: ${scanData['scanId']}');
-            print('   🖼️  Image URL: ${scanData['imageUrl']}');
-            print('   👁️  Eye: ${scanData['eye']}');
-            print('   🔍 Prediction: ${scanData['prediction']}');
+            Logger.d('   📸 Scan ID: ${scanData['scanId']}');
+            Logger.d('   🖼️  Image URL: ${scanData['imageUrl']}');
+            Logger.d('   👁️  Eye: ${scanData['eye']}');
+            Logger.d('   🔍 Prediction: ${scanData['prediction']}');
           }
         } else {
-          print('🔑 Key: $key (NULL DATA)');
+          Logger.d('🔑 Key: $key (NULL DATA)');
         }
       }
-      print('===================\n');
+      Logger.d('===================\n');
     } catch (e) {
-      print('❌ Error in debugPrintQueue: $e');
+      Logger.d('❌ Error in debugPrintQueue: $e');
     }
   }
 
@@ -539,7 +540,7 @@ class OfflineSyncService {
       final syncQueue = await Hive.openBox('syncQueueBox');
       final keysToDelete = <dynamic>[];
 
-      print('🧹 Starting cleanup of sync queue...');
+      Logger.d('🧹 Starting cleanup of sync queue...');
 
       for (var key in syncQueue.keys) {
         try {
@@ -556,7 +557,7 @@ class OfflineSyncService {
           if (type == 'scan') {
             final scanId = data?['scanId'];
             if (scanId == null || scanId.toString().isEmpty) {
-              print('🗑️ Found invalid scan with empty scanId: $key');
+              Logger.d('🗑️ Found invalid scan with empty scanId: $key');
               keysToDelete.add(key);
               continue;
             }
@@ -570,11 +571,11 @@ class OfflineSyncService {
                 final daysDiff = now.difference(itemDate).inDays;
 
                 if (daysDiff > 7) {
-                  print('🗑️ Found old sync item (${daysDiff} days): $key');
+                  Logger.d('🗑️ Found old sync item ($daysDiff days): $key');
                   keysToDelete.add(key);
                 }
               } catch (e) {
-                print('⚠️ Invalid timestamp format in $key: $timestamp');
+                Logger.d('⚠️ Invalid timestamp format in $key: $timestamp');
               }
             }
           }
@@ -582,11 +583,11 @@ class OfflineSyncService {
           // Check retry count
           final retryCount = item['retryCount'] ?? 0;
           if (retryCount >= 5) {
-            print('🗑️ Found item with too many retries ($retryCount): $key');
+            Logger.d('🗑️ Found item with too many retries ($retryCount): $key');
             keysToDelete.add(key);
           }
         } catch (e) {
-          print('⚠️ Error checking item $key: $e');
+          Logger.d('⚠️ Error checking item $key: $e');
           keysToDelete.add(key);
         }
       }
@@ -594,13 +595,13 @@ class OfflineSyncService {
       // Delete invalid items
       for (var key in keysToDelete) {
         await syncQueue.delete(key);
-        print('✅ Deleted invalid/old item: $key');
+        Logger.d('✅ Deleted invalid/old item: $key');
       }
 
-      print('🧹 Cleanup complete: ${keysToDelete.length} items removed');
-      print('📊 Remaining items: ${syncQueue.keys.length}');
+      Logger.d('🧹 Cleanup complete: ${keysToDelete.length} items removed');
+      Logger.d('📊 Remaining items: ${syncQueue.keys.length}');
     } catch (e) {
-      print('❌ Error in cleanupInvalidItems: $e');
+      Logger.d('❌ Error in cleanupInvalidItems: $e');
     }
   }
 
@@ -611,22 +612,22 @@ class OfflineSyncService {
       final user = FirebaseAuth.instance.currentUser;
 
       if (user == null) {
-        print('❌ No user logged in for force sync');
+        Logger.d('❌ No user logged in for force sync');
         return false;
       }
 
       final item = syncQueue.get(scanId);
       if (item == null || item['type'] != 'scan') {
-        print('❌ Scan $scanId not found in sync queue');
+        Logger.d('❌ Scan $scanId not found in sync queue');
         return false;
       }
 
-      print('🔄 Force syncing scan: $scanId');
+      Logger.d('🔄 Force syncing scan: $scanId');
       await _syncScanData(scanId, item['data'], user.uid, syncQueue);
-      print('✅ Force sync completed for: $scanId');
+      Logger.d('✅ Force sync completed for: $scanId');
       return true;
     } catch (e) {
-      print('❌ Error in force sync: $e');
+      Logger.d('❌ Error in force sync: $e');
       return false;
     }
   }
@@ -673,7 +674,7 @@ class OfflineSyncService {
         'highRetryCount': highRetryCount,
       };
     } catch (e) {
-      print('❌ Error getting sync stats: $e');
+      Logger.d('❌ Error getting sync stats: $e');
       return {};
     }
   }

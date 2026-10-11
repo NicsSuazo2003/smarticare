@@ -4,7 +4,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/features/symptom_assessment/presentation/referral_criteria_widget.dart';
 import 'package:flutter_application_1/services/audit_log_service.dart';
-import 'package:flutter_application_1/main.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'package:flutter_application_1/services/referral_service.dart';
 import 'package:flutter_application_1/services/ml/staging_service.dart';
@@ -21,6 +20,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
 import 'package:provider/provider.dart';
 import '../../auth/providers/user_session_provider.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class ScanResultScreen extends StatefulWidget {
   final String imageUrl;
@@ -88,29 +88,29 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
             if (imageUrl != null &&
                 imageUrl
                     .startsWith('https://firebasestorage.googleapis.com/')) {
-              print(
+              Logger.d(
                   '✅ Scan verified: Storage URL present - ${imageUrl.substring(0, 50)}...');
             } else {
-              print('❌ Scan verification failed: Invalid imageUrl - $imageUrl');
+              Logger.d('❌ Scan verification failed: Invalid imageUrl - $imageUrl');
             }
             break;
           } else {
             retryCount++;
-            print(
+            Logger.d(
                 '⏳ Scan not found yet, retrying... ($retryCount/$maxRetries)');
             await Future.delayed(
                 Duration(seconds: retryCount * 1)); // Exponential backoff
           }
         } catch (e) {
           retryCount++;
-          print('⚠️ Error checking scan existence: $e');
+          Logger.d('⚠️ Error checking scan existence: $e');
           if (retryCount >= maxRetries) break;
           await Future.delayed(Duration(seconds: retryCount * 1));
         }
       }
 
       if (!scanExists) {
-        print('⚠️ Scan document not found after $maxRetries attempts');
+        Logger.d('⚠️ Scan document not found after $maxRetries attempts');
         return;
       }
 
@@ -167,7 +167,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         });
       }
 
-      print('✅ Notifications created for scan: ${widget.scanId}');
+      Logger.d('✅ Notifications created for scan: ${widget.scanId}');
       // Save enhanced staging back into the scan document
       try {
         final String enhancedStaging = StagingService.determineStage(
@@ -187,9 +187,9 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
           'riskLevel': riskLevel,
         });
 
-        print('✅ enhancedStaging written: $enhancedStaging');
+        Logger.d('✅ enhancedStaging written: $enhancedStaging');
       } catch (e) {
-        print('⚠️ Failed to write enhancedStaging: $e');
+        Logger.d('⚠️ Failed to write enhancedStaging: $e');
       }
 
       await AuditLogService.logAction(
@@ -199,7 +199,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
         scanId: widget.scanId,
       );
     } catch (e) {
-      print('❌ Error in _saveScanResultToFirestore: $e');
+      Logger.d('❌ Error in _saveScanResultToFirestore: $e');
     }
   }
 
@@ -259,7 +259,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
           checkResult: checkResult,
         );
 
-        print('🎯 Referral auto-created: $referralId');
+        Logger.d('🎯 Referral auto-created: $referralId');
 
         // Show success message to user
         if (mounted) {
@@ -274,10 +274,10 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
           );
         }
       } else {
-        print('ℹ️ No referral triggers met - normal monitoring mode');
+        Logger.d('ℹ️ No referral triggers met - normal monitoring mode');
       }
     } catch (e) {
-      print('❌ Error in referral process: $e');
+      Logger.d('❌ Error in referral process: $e');
       // Don't fail the scan - log and continue
     }
   }
@@ -399,7 +399,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
           ),
         ),
         errorWidget: (context, url, error) {
-          print('Error loading image: $error'); // ✅ Add logging
+          Logger.d('Error loading image: $error'); // ✅ Add logging
           return Container(
             height: 180,
             color: Colors.grey.shade200,
@@ -418,7 +418,7 @@ class _ScanResultScreenState extends State<ScanResultScreen> {
       try {
         return Image.file(File(imageUrl), height: 180, fit: BoxFit.cover);
       } catch (e) {
-        print('Error loading file: $e');
+        Logger.d('Error loading file: $e');
         return Container(
           height: 180,
           color: Colors.grey.shade200,

@@ -7,7 +7,7 @@ import 'bhw_result_slip_screen.dart';
 import 'bhw_patient_history_screen.dart';
 
 class BHWPatientListScreen extends StatefulWidget {
-  const BHWPatientListScreen({Key? key}) : super(key: key);
+  const BHWPatientListScreen({super.key});
 
   @override
   State<BHWPatientListScreen> createState() => _BHWPatientListScreenState();

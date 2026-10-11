@@ -4,16 +4,15 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../../data/models/bhw_patient_model.dart';
 import '../providers/bhw_patient_provider.dart';
-import '../../../features/symptom_assessment/providers/symptom_assessment_provider.dart';
 import 'bhw_result_slip_screen.dart';
 
 class BHWSymptomAssessmentScreen extends StatefulWidget {
   final BHWPatient patient;
 
   const BHWSymptomAssessmentScreen({
-    Key? key,
+    super.key,
     required this.patient,
-  }) : super(key: key);
+  });
 
   @override
   State<BHWSymptomAssessmentScreen> createState() =>

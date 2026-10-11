@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class ReferralCheckResult {
   final bool shouldRefer;
@@ -31,12 +32,12 @@ class ReferralService {
     bool shouldRefer = false;
 
     try {
-      print('🔵 Checking referral triggers for user: $userId');
+      Logger.d('🔵 Checking referral triggers for user: $userId');
 
       // ✅ MOVED UP: Check for existing pending referral FIRST
       final existingReferral = await _checkExistingPendingReferral(userId, eye);
       if (existingReferral) {
-        print('⚠️ User already has a pending referral for $eye - skipping');
+        Logger.d('⚠️ User already has a pending referral for $eye - skipping');
         return ReferralCheckResult(
           shouldRefer: false,
           triggeredReasons: ['Existing pending referral found'],
@@ -52,7 +53,7 @@ class ReferralService {
         triggeredReasons.add(
             'High confidence cataract detection (${(confidence * 100).toStringAsFixed(0)}%)');
         shouldRefer = true;
-        print('✅ Trigger 1 HIT: High Confidence Cataract');
+        Logger.d('✅ Trigger 1 HIT: High Confidence Cataract');
       }
 
       // Trigger 2:  Worsening Condition
@@ -65,7 +66,7 @@ class ReferralService {
           triggeredReasons
               .add('Condition worsened:  $previousRisk → $currentRisk');
           shouldRefer = true;
-          print('✅ Trigger 2 HIT: Worsening Condition');
+          Logger.d('✅ Trigger 2 HIT: Worsening Condition');
         }
       }
 
@@ -74,7 +75,7 @@ class ReferralService {
         triggeredReasons
             .add('High risk score (${healthScore.toStringAsFixed(0)}%)');
         shouldRefer = true;
-        print('✅ Trigger 3 HIT:  High Risk Score');
+        Logger.d('✅ Trigger 3 HIT:  High Risk Score');
       }
 
       // Trigger 4: Consecutive High Risk Scans
@@ -82,7 +83,7 @@ class ReferralService {
       if (consecutiveHighRisk) {
         triggeredReasons.add('Multiple consecutive high-risk scans detected');
         shouldRefer = true;
-        print('✅ Trigger 4 HIT:  Consecutive High Risk');
+        Logger.d('✅ Trigger 4 HIT:  Consecutive High Risk');
       }
 
       // Trigger 5: Advanced Stage Detection
@@ -90,7 +91,7 @@ class ReferralService {
           prediction.toLowerCase().contains('advanced')) {
         triggeredReasons.add('Advanced cataract stage detected');
         shouldRefer = true;
-        print('✅ Trigger 5 HIT: Advanced Stage');
+        Logger.d('✅ Trigger 5 HIT: Advanced Stage');
       }
 
       // Trigger 6: Multiple Symptoms
@@ -98,11 +99,11 @@ class ReferralService {
         triggeredReasons.add(
             'Multiple symptoms reported (Score: ${(symptomScore * 100).toStringAsFixed(0)}%)');
         shouldRefer = true;
-        print('✅ Trigger 6 HIT: Many Symptoms');
+        Logger.d('✅ Trigger 6 HIT: Many Symptoms');
       }
 
       final riskLevel = _getRiskLevel(healthScore);
-      print(
+      Logger.d(
           '📊 Final Decision - Should Refer: $shouldRefer, Risk:  $riskLevel');
 
       return ReferralCheckResult(
@@ -111,7 +112,7 @@ class ReferralService {
         riskLevel: riskLevel,
       );
     } catch (e) {
-      print('❌ Error checking referral triggers:  $e');
+      Logger.d('❌ Error checking referral triggers:  $e');
       rethrow;
     }
   }
@@ -141,7 +142,7 @@ class ReferralService {
 
       return referralSnapshot.docs.isNotEmpty;
     } catch (e) {
-      print('⚠️ Error checking existing referral: $e');
+      Logger.d('⚠️ Error checking existing referral: $e');
       return false;
     }
   }
@@ -158,7 +159,7 @@ class ReferralService {
     required ReferralCheckResult checkResult,
   }) async {
     try {
-      print('🎯 Creating referral for user: $userId');
+      Logger.d('🎯 Creating referral for user: $userId');
 
       final batch = _firestore.batch();
 
@@ -216,8 +217,8 @@ class ReferralService {
 
       await batch.commit();
 
-      print('✅ Referral created:  $referralId');
-      print('✅ Appointment created: $appointmentId');
+      Logger.d('✅ Referral created:  $referralId');
+      Logger.d('✅ Appointment created: $appointmentId');
 
       // Send notifications
       await _sendNotifications(
@@ -240,7 +241,7 @@ class ReferralService {
 
       return referralId;
     } catch (e) {
-      print('❌ Error creating referral: $e');
+      Logger.d('❌ Error creating referral: $e');
       rethrow;
     }
   }
@@ -283,7 +284,7 @@ class ReferralService {
       }
       return null;
     } catch (e) {
-      print('⚠️ Error fetching previous scan:  $e');
+      Logger.d('⚠️ Error fetching previous scan:  $e');
       return null;
     }
   }
@@ -310,7 +311,7 @@ class ReferralService {
 
       return highRiskCount >= 2;
     } catch (e) {
-      print('⚠️ Error checking consecutive high risk: $e');
+      Logger.d('⚠️ Error checking consecutive high risk: $e');
       return false;
     }
   }
@@ -375,9 +376,9 @@ class ReferralService {
         'isRead': false,
       });
 
-      print('✅ Notifications sent');
+      Logger.d('✅ Notifications sent');
     } catch (e) {
-      print('⚠️ Error sending notifications: $e');
+      Logger.d('⚠️ Error sending notifications: $e');
     }
   }
 
@@ -396,7 +397,7 @@ class ReferralService {
         'timestamp': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      print('⚠️ Error logging action: $e');
+      Logger.d('⚠️ Error logging action: $e');
     }
   }
 }

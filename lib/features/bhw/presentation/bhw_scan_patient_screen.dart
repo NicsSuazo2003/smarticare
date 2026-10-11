@@ -3,12 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../data/models/bhw_patient_model.dart';
-import '../providers/bhw_patient_provider.dart';
 import '../../../features/symptom_assessment/providers/symptom_assessment_provider.dart';
 import 'bhw_symptom_assessment_screen.dart';
 
 class BHWScanPatientScreen extends StatefulWidget {
-  const BHWScanPatientScreen({Key? key}) : super(key: key);
+  const BHWScanPatientScreen({super.key});
 
   @override
   State<BHWScanPatientScreen> createState() => _BHWScanPatientScreenState();
@@ -28,7 +27,7 @@ class _BHWScanPatientScreenState extends State<BHWScanPatientScreen> {
   String _selectedSex = 'Male';
   String _diabeticStatus = 'Unknown';
 
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   @override
   void dispose() {
@@ -230,7 +229,7 @@ class _BHWScanPatientScreenState extends State<BHWScanPatientScreen> {
               Expanded(
                 flex: 3,
                 child: DropdownButtonFormField<String>(
-                  value: _selectedSex,
+                  initialValue: _selectedSex,
                   decoration: InputDecoration(
                     labelText: 'Sex *',
                     prefixIcon: const Icon(Icons.wc),

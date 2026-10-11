@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class SecurityService {
   static const int MAX_FAILED_ATTEMPTS = 5;
@@ -71,7 +71,7 @@ class SecurityService {
 
       return true;
     } catch (e) {
-      print('❌ Error checking password reset rate limit: $e');
+      Logger.d('❌ Error checking password reset rate limit: $e');
       return false; // Fail secure - deny request on error
     }
   }
@@ -113,7 +113,7 @@ class SecurityService {
 
       return null;
     } catch (e) {
-      print('❌ Error getting password reset cooldown: $e');
+      Logger.d('❌ Error getting password reset cooldown: $e');
       return null;
     }
   }
@@ -136,10 +136,10 @@ class SecurityService {
       }
       await batch.commit();
 
-      print(
+      Logger.d(
           '✅ Cleaned up ${snapshot.docs.length} expired password reset limits');
     } catch (e) {
-      print('❌ Error cleaning up password reset limits: $e');
+      Logger.d('❌ Error cleaning up password reset limits: $e');
     }
   }
 
@@ -167,7 +167,7 @@ class SecurityService {
 
       return false;
     } catch (e) {
-      print('❌ Error checking account lock: $e');
+      Logger.d('❌ Error checking account lock: $e');
       return false;
     }
   }
@@ -217,7 +217,7 @@ class SecurityService {
         severity: failedAttempts >= 2 ? 'MEDIUM' : 'LOW',
       );
     } catch (e) {
-      print('❌ Error checking suspicious activity: $e');
+      Logger.d('❌ Error checking suspicious activity: $e');
     }
   }
 
@@ -263,7 +263,7 @@ class SecurityService {
         }
       }
     } catch (e) {
-      print('❌ Error checking new device: $e');
+      Logger.d('❌ Error checking new device: $e');
     }
   }
 
@@ -344,7 +344,7 @@ Your SmartiCare Security Team
         severity: 'MEDIUM',
       );
     } catch (e) {
-      print('❌ Error recording failed attempt: $e');
+      Logger.d('❌ Error recording failed attempt: $e');
     }
   }
 
@@ -368,7 +368,7 @@ Your SmartiCare Security Team
         severity: 'LOW',
       );
     } catch (e) {
-      print('❌ Error resetting failed attempts: $e');
+      Logger.d('❌ Error resetting failed attempts: $e');
     }
   }
 
@@ -390,7 +390,7 @@ Your SmartiCare Security Team
       final remaining = lockedUntil.difference(DateTime.now()).inMinutes;
       return remaining > 0 ? remaining : 0;
     } catch (e) {
-      print('❌ Error getting lockout time: $e');
+      Logger.d('❌ Error getting lockout time: $e');
       return 0;
     }
   }
@@ -408,7 +408,7 @@ Your SmartiCare Security Team
       final data = doc.data() as Map<String, dynamic>;
       return (data['failedAttempts'] as int?) ?? 0;
     } catch (e) {
-      print('❌ Error getting failed attempts: $e');
+      Logger.d('❌ Error getting failed attempts: $e');
       return 0;
     }
   }
@@ -430,9 +430,9 @@ Your SmartiCare Security Team
         'userType': 'patient', // Distinguish from admin logs
       });
 
-      print('✅ Security event logged: $action');
+      Logger.d('✅ Security event logged: $action');
     } catch (e) {
-      print('❌ Error logging security event: $e');
+      Logger.d('❌ Error logging security event: $e');
     }
   }
 
@@ -452,9 +452,9 @@ Your SmartiCare Security Team
         'sent': false,
       });
 
-      print('✅ Security alert queued for $email');
+      Logger.d('✅ Security alert queued for $email');
     } catch (e) {
-      print('❌ Error queuing security alert: $e');
+      Logger.d('❌ Error queuing security alert: $e');
     }
   }
 
@@ -473,9 +473,9 @@ Your SmartiCare Security Team
         severity: 'LOW',
       );
 
-      print('✅ 2FA enabled for user: $userId');
+      Logger.d('✅ 2FA enabled for user: $userId');
     } catch (e) {
-      print('❌ Error enabling 2FA: $e');
+      Logger.d('❌ Error enabling 2FA: $e');
     }
   }
 
@@ -494,10 +494,10 @@ Your SmartiCare Security Team
           .get();
 
       return snapshot.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
+          .map((doc) => doc.data())
           .toList();
     } catch (e) {
-      print('❌ Error fetching login activity: $e');
+      Logger.d('❌ Error fetching login activity: $e');
       return [];
     }
   }

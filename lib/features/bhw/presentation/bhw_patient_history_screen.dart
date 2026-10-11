@@ -8,10 +8,10 @@ class BHWPatientHistoryScreen extends StatelessWidget {
   final List<BHWPatient> patientHistory;
 
   const BHWPatientHistoryScreen({
-    Key? key,
+    super.key,
     required this.patientName,
     required this.patientHistory,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

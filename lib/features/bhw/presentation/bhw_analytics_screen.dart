@@ -6,7 +6,7 @@ import '../providers/bhw_patient_provider.dart';
 import '../../../data/models/bhw_patient_model.dart';
 
 class BHWAnalyticsScreen extends StatefulWidget {
-  const BHWAnalyticsScreen({Key? key}) : super(key: key);
+  const BHWAnalyticsScreen({super.key});
 
   @override
   State<BHWAnalyticsScreen> createState() => _BHWAnalyticsScreenState();

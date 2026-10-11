@@ -6,8 +6,8 @@ import 'package:flutter_application_1/features/home/presentation/home_screen.dar
 import 'package:flutter_application_1/services/audit_log_service.dart';
 import 'package:flutter_application_1/features/auth/presentation/login.dart';
 import 'package:intl/intl.dart';
-import '../../../features/eye_scan/presentation/eye_scan_screen.dart';
 import '../../../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class CompleteProfileScreen extends StatefulWidget {
   final String uid;
@@ -16,12 +16,12 @@ class CompleteProfileScreen extends StatefulWidget {
   final String lastName;
 
   const CompleteProfileScreen({
-    Key? key,
+    super.key,
     required this.uid,
     required this.email,
     required this.firstName,
     required this.lastName,
-  }) : super(key: key);
+  });
 
   @override
   State<CompleteProfileScreen> createState() => _CompleteProfileScreenState();
@@ -220,7 +220,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           try {
             await FirebaseAuth.instance.signOut();
           } catch (e) {
-            print('Sign out error: $e');
+            Logger.d('Sign out error: $e');
           }
 
           // Navigate to login and clear stack
@@ -269,7 +269,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                 const SizedBox(height: 12),
                 // Gender
                 DropdownButtonFormField<String>(
-                  value: _selectedGender,
+                  initialValue: _selectedGender,
                   items: [
                     'Select Gender',
                     'Male',

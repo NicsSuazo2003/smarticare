@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_application_1/features/symptom_assessment/providers/symptom_assessment_provider.dart';
 import 'package:provider/provider.dart';
 import 'symptom_assessment_q4_screen.dart'; // Import Q4 screen
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class SymptomAssessmentQ3Screen extends StatefulWidget {
   final Function(String) onAnswer;
@@ -271,7 +272,7 @@ class _SymptomAssessmentQ3ScreenState extends State<SymptomAssessmentQ3Screen> {
                                       SymptomAssessmentQ4Screen(
                                     onAnswer: (answer) {
                                       // Store Q4 answer
-                                      print('Q4 Answer: $answer');
+                                      Logger.d('Q4 Answer: $answer');
                                       // In a real app, you would save the answer to a state management solution
                                     },
                                     onNext: () {

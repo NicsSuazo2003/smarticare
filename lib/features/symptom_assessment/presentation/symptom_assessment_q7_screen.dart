@@ -6,12 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_1/features/eye_scan/presentation/eye_scan_screen.dart';
-import 'package:flutter_application_1/services/audit_log_service.dart';
 import 'package:provider/provider.dart';
 import '../providers/symptom_assessment_provider.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../../../services/offline_sync_service.dart'; // Add this import at the top
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class SymptomAssessmentQ7Screen extends StatefulWidget {
   final Function(String) onAnswer;
@@ -73,7 +73,7 @@ class _SymptomAssessmentQ7ScreenState extends State<SymptomAssessmentQ7Screen> {
     final List<String> symptoms = [];
     answers.forEach((key, value) {
       if (!_symptomMap.containsKey(key)) return;
-      final valStr = value?.toString().toLowerCase() ?? '';
+      final valStr = value.toString().toLowerCase() ?? '';
       if (valStr.isEmpty) return;
       if (valStr == 'never' || valStr == 'no' || valStr == '0') return;
       // Treat any other value as indicating the symptom
@@ -122,7 +122,7 @@ class _SymptomAssessmentQ7ScreenState extends State<SymptomAssessmentQ7Screen> {
       final allAnswers = _ensureAllQuestionsPresent(rawAnswers);
 
       // Debug: print answers being saved
-      print('DEBUG: Saving assessment answers: $allAnswers');
+      Logger.d('DEBUG: Saving assessment answers: $allAnswers');
 
       // Compute symptom score
       final double symptomScore = assessmentProvider.getSymptomScore();
@@ -171,7 +171,7 @@ class _SymptomAssessmentQ7ScreenState extends State<SymptomAssessmentQ7Screen> {
                     .trim();
           }
         } catch (e) {
-          print('DEBUG: Failed to fetch user doc for patientName: $e');
+          Logger.d('DEBUG: Failed to fetch user doc for patientName: $e');
         }
       }
 
@@ -211,17 +211,17 @@ class _SymptomAssessmentQ7ScreenState extends State<SymptomAssessmentQ7Screen> {
               .collection('assessments')
               .add(onlinePayload)
               .timeout(const Duration(seconds: 2));
-          print('✅ Assessment saved to Firestore');
+          Logger.d('✅ Assessment saved to Firestore');
           assessmentSaved = true; // ✅ Mark as saved
         } catch (e) {
-          print('⚠️ Failed to save assessment online: $e');
+          Logger.d('⚠️ Failed to save assessment online: $e');
           assessmentSaved = false; // ✅ Mark as NOT saved
         }
       }
 
 // ✅ FIX: Only save offline if NOT already saved online
       if (!assessmentSaved && userId != null) {
-        print('📴 Saving assessment offline (online save failed or offline)');
+        Logger.d('📴 Saving assessment offline (online save failed or offline)');
         await _saveAssessmentOffline(allAnswers, symptomScore, conclusionText,
             normalizedRisk, patientName, userId, clinicalSummary);
       }
@@ -240,7 +240,7 @@ class _SymptomAssessmentQ7ScreenState extends State<SymptomAssessmentQ7Screen> {
         );
       }
     } catch (e) {
-      print('❌ Error in assessment completion: $e');
+      Logger.d('❌ Error in assessment completion: $e');
       if (mounted) {
         setState(() {
           _isSaving = false;

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_application_1/features/eye_scan/presentation/full_report_screen.dart';
 import 'package:flutter_application_1/features/home/presentation/home_screen.dart';
 import 'package:flutter_application_1/features/profile/presentation/profile_screen.dart';
@@ -8,6 +7,7 @@ import 'package:flutter_application_1/features/profile/presentation/progress_scr
 import 'package:flutter_application_1/features/reminders/presentation/reminder_screen.dart';
 import 'package:flutter_application_1/features/symptom_assessment/presentation/symptom_assessment_screen.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class ViewHistoryScreen extends StatefulWidget {
   const ViewHistoryScreen({super.key});
@@ -98,9 +98,9 @@ class _ViewHistoryScreenState extends State<ViewHistoryScreen> {
         _isLoading = false;
       });
 
-      print('✅ History loaded: ${scanHistory.length} scans');
+      Logger.d('✅ History loaded: ${scanHistory.length} scans');
     } catch (e) {
-      print('Error fetching scan history: $e');
+      Logger.d('Error fetching scan history: $e');
       setState(() {
         _isLoading = false;
       });

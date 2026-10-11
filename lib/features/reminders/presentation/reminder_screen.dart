@@ -13,6 +13,7 @@ import '../../../features/profile/presentation/progress_screen.dart';
 import '../../../features/profile/presentation/profile_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../../symptom_assessment/presentation/symptom_assessment_screen.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class ReminderScreen extends StatefulWidget {
   const ReminderScreen({super.key});
@@ -79,8 +80,9 @@ class _ReminderScreenState extends State<ReminderScreen> {
 // Inside _ReminderScreenState class in reminder_screen.dart
 
   Future<void> _scheduleNotification(Reminder reminder) async {
-    if (!reminder.notification)
+    if (!reminder.notification) {
       return; // Don't schedule if notifications are off
+    }
 
     // 1. Calculate the Trigger Time
     final tz.TZDateTime eventDate = tz.TZDateTime.from(
@@ -94,7 +96,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
 
     // 2. Safety Check: If time is already past, don't crash
     if (scheduledDate.isBefore(tz.TZDateTime.now(tz.local))) {
-      print("Skipping notification: Time is in the past");
+      Logger.d("Skipping notification: Time is in the past");
       return;
     }
 
@@ -803,7 +805,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
   }
 
   Widget _buildNotificationsTab() {
-    IconData _iconForType(String type) {
+    IconData iconForType(String type) {
       switch (type) {
         case "appointment":
           return Icons.event_note;
@@ -820,7 +822,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
       }
     }
 
-    Future<void> _markAsRead(String notificationId) async {
+    Future<void> markAsRead(String notificationId) async {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
       await FirebaseFirestore.instance
@@ -835,13 +837,13 @@ class _ReminderScreenState extends State<ReminderScreen> {
       });
     }
 
-    void _showMessageDialog(Map<String, dynamic> notification) {
+    void showMessageDialog(Map<String, dynamic> notification) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: Row(
             children: [
-              Icon(_iconForType(notification["type"]), color: Colors.blue),
+              Icon(iconForType(notification["type"]), color: Colors.blue),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -857,7 +859,7 @@ class _ReminderScreenState extends State<ReminderScreen> {
               TextButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  _markAsRead(notification["id"]);
+                  markAsRead(notification["id"]);
                 },
                 child: const Text('Mark as Read'),
               ),
@@ -902,12 +904,12 @@ class _ReminderScreenState extends State<ReminderScreen> {
                       style: const TextStyle(fontSize: 12),
                     ),
                     leading: Icon(
-                      _iconForType(notification["type"] ?? ""),
+                      iconForType(notification["type"] ?? ""),
                       color: isUnread ? Colors.blue : Colors.grey,
                     ),
                     onTap: () {
-                      _showMessageDialog(notification);
-                      if (isUnread) _markAsRead(notification["id"]);
+                      showMessageDialog(notification);
+                      if (isUnread) markAsRead(notification["id"]);
                     },
                   );
                 },
@@ -1442,7 +1444,7 @@ class _NewReminderDialogState extends State<_NewReminderDialog> {
             const SizedBox(height: 14),
             // Repeat
             DropdownButtonFormField<String>(
-              value: _repeat,
+              initialValue: _repeat,
               items: repeatOptions
                   .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                   .toList(),
@@ -1460,7 +1462,7 @@ class _NewReminderDialogState extends State<_NewReminderDialog> {
               title: const Text("Notification"),
               value: _notification,
               onChanged: (v) => setState(() => _notification = v),
-              activeColor: primaryColor,
+              activeThumbColor: primaryColor,
               secondary: Icon(
                 _notification
                     ? Icons.notifications_active
@@ -1470,7 +1472,7 @@ class _NewReminderDialogState extends State<_NewReminderDialog> {
             ),
             const SizedBox(height: 14),
             DropdownButtonFormField<int>(
-              value: _notifyBefore,
+              initialValue: _notifyBefore,
               items: _notifyOptions.entries.map((e) {
                 return DropdownMenuItem<int>(
                   value: e.key,
@@ -1788,7 +1790,7 @@ class _EditReminderDialogState extends State<_EditReminderDialog> {
             const SizedBox(height: 14),
             // Repeat
             DropdownButtonFormField<String>(
-              value: _repeat,
+              initialValue: _repeat,
               items: repeatOptions
                   .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                   .toList(),
@@ -1806,7 +1808,7 @@ class _EditReminderDialogState extends State<_EditReminderDialog> {
               title: const Text("Notification"),
               value: _notification,
               onChanged: (v) => setState(() => _notification = v),
-              activeColor: primaryColor,
+              activeThumbColor: primaryColor,
               secondary: Icon(
                 _notification
                     ? Icons.notifications_active
@@ -1817,7 +1819,7 @@ class _EditReminderDialogState extends State<_EditReminderDialog> {
             const SizedBox(height: 14),
 // Notify before dropdown - ONLY ONE, NOT DUPLICATED
             DropdownButtonFormField<int>(
-              value: _notifyBefore,
+              initialValue: _notifyBefore,
               items: _notifyOptions.entries.map((e) {
                 return DropdownMenuItem<int>(
                   value: e.key,

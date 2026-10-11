@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_application_1/core/utils/logger.dart';
 
 class AssessmentService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -26,7 +27,7 @@ class AssessmentService {
         'completed': true
       });
     } catch (e) {
-      print('Error saving assessment: $e');
+      Logger.d('Error saving assessment: $e');
       rethrow;
     }
   }
@@ -52,7 +53,7 @@ class AssessmentService {
               })
           .toList();
     } catch (e) {
-      print('Error getting assessment history: $e');
+      Logger.d('Error getting assessment history: $e');
       rethrow;
     }
   }
