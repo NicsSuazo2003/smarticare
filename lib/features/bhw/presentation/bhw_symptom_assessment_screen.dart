@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../../data/models/bhw_patient_model.dart';
-import '../../features/bhw/providers/bhw_patient_provider.dart';
+import '../providers/bhw_patient_provider.dart';
 import '../../../features/symptom_assessment/providers/symptom_assessment_provider.dart';
 import 'bhw_result_slip_screen.dart';
 
