@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../features/home/presentation/home_screen.dart';
-import '../../../Screens/progress_screen.dart';
+import '../../../features/profile/presentation/progress_screen.dart';
 import '../../../features/reminders/presentation/reminder_screen.dart';
-import '../../../Screens/profile_screen.dart';
+import '../../../features/profile/presentation/profile_screen.dart';
 import '../../../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
 
 class PrivacyPolicyScreen extends StatefulWidget {

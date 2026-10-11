@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../features/home/presentation/home_screen.dart';
+import '../../home/presentation/home_screen.dart';
 import 'progress_screen.dart';
-import '../features/reminders/presentation/reminder_screen.dart';
+import '../../reminders/presentation/reminder_screen.dart';
 import 'profile_screen.dart';
-import '../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
+import '../../symptom_assessment/presentation/symptom_assessment_screen.dart';
 
 class FAQsScreen extends StatefulWidget {
   const FAQsScreen({super.key});

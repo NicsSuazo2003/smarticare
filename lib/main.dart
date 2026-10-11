@@ -8,7 +8,7 @@ import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'firebase_options.dart';
 import 'features/auth/presentation/login.dart';
 import 'features/auth/presentation/register_screen.dart';
-import 'screens/personal_screen.dart';
+import 'features/profile/presentation/personal_screen.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'package:provider/provider.dart';
 import 'features/symptom_assessment/providers/symptom_assessment_provider.dart';

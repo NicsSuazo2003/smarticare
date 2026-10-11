@@ -15,9 +15,9 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../services/offline_sync_service.dart';
 import 'scan_result_screen.dart';
 import '../../home/presentation/home_screen.dart';
-import '../../../Screens/progress_screen.dart';
+import '../../../features/profile/presentation/progress_screen.dart';
 import '../../../features/reminders/presentation/reminder_screen.dart';
-import '../../../Screens/profile_screen.dart';
+import '../../../features/profile/presentation/profile_screen.dart';
 import '../../../Screens/tflite_helper.dart'; // Your model helper
 import 'package:provider/provider.dart';
 import '../../auth/providers/user_session_provider.dart';

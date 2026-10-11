@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../features/home/presentation/home_screen.dart';
+import '../../home/presentation/home_screen.dart';
 import 'progress_screen.dart';
-import '../features/reminders/presentation/reminder_screen.dart';
+import '../../reminders/presentation/reminder_screen.dart';
 import 'profile_screen.dart';
-import '../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
+import '../../symptom_assessment/presentation/symptom_assessment_screen.dart';
 
 class ActivityLogScreen extends StatefulWidget {
   const ActivityLogScreen({super.key});

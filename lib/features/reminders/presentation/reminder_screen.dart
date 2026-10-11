@@ -9,8 +9,8 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../home/presentation/home_screen.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import '../../../Screens/progress_screen.dart';
-import '../../../Screens/profile_screen.dart';
+import '../../../features/profile/presentation/progress_screen.dart';
+import '../../../features/profile/presentation/profile_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../../symptom_assessment/presentation/symptom_assessment_screen.dart';
 

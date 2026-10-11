@@ -4,17 +4,17 @@ import 'package:flutter_application_1/features/eye_scan/data/latest_scan_cache.d
 import 'package:flutter_application_1/audit_log_service.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/security_service.dart';
-import '../features/home/presentation/home_screen.dart';
+import '../../../services/security_service.dart';
+import '../../home/presentation/home_screen.dart';
 import 'progress_screen.dart';
-import '../features/reminders/presentation/reminder_screen.dart';
-import '../features/symptom_assessment/presentation/symptom_assessment_screen.dart';
+import '../../reminders/presentation/reminder_screen.dart';
+import '../../symptom_assessment/presentation/symptom_assessment_screen.dart';
 
 import 'faqs_screen.dart'; // Import for FAQsScreen
-import '../features/onboarding/presentation/privacy_policy_screen.dart'; // Import for PrivacyPolicyScreen
-import '../features/onboarding/presentation/terms_of_service_screen.dart'; // Added import for TermsOfServiceScreen
+import '../../onboarding/presentation/privacy_policy_screen.dart'; // Import for PrivacyPolicyScreen
+import '../../onboarding/presentation/terms_of_service_screen.dart'; // Added import for TermsOfServiceScreen
 import 'package:firebase_auth/firebase_auth.dart'; // Import FirebaseAuth
-import '../features/auth/presentation/login.dart'; // Import the login screen
+import '../../auth/presentation/login.dart'; // Import the login screen
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});

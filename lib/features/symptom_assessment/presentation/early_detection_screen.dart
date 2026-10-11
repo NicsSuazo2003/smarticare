@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../../../Screens/personal_screen.dart';
+import '../../../features/profile/presentation/personal_screen.dart';
 
 class EarlyDetectionScreen extends StatefulWidget {
   final VoidCallback onSkip;
