@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'symptom_assessment_q1_screen.dart'; // Import the Q1 screen
 import 'package:flutter_application_1/core/utils/logger.dart';
+import '../data/symptom_questions.dart';
+import 'symptom_question_screen.dart';
 
 class SymptomAssessmentScreen extends StatefulWidget {
   const SymptomAssessmentScreen({super.key, VoidCallback? onStart});
@@ -50,28 +51,12 @@ class _SymptomAssessmentScreenState extends State<SymptomAssessmentScreen>
     super.dispose();
   }
 
-  // Method to navigate to Question 1 screen
-  // Method to navigate to Question 1 screen
   void _navigateToQuestionOne() {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => SymptomAssessmentQ1Screen(
-          onAnswer: (answer) {
-            // Store the answer in your application state or a provider
-            Logger.d('User selected: $answer');
-
-            // In a real app, you would save this answer to your state management solution
-            // For example:
-            // Provider.of<AssessmentProvider>(context, listen: false).setQ1Answer(answer);
-          },
-          onNext: () {
-            // Navigate to question 2
-            // For now, we'll just navigate back to the home screen
-            // In a real app, you would navigate to the next question:
-            // Navigator.push(context, MaterialPageRoute(builder: (context) => SymptomAssessmentQ2Screen(...)));
-            Navigator.pop(context); // Just for demo purposes
-          },
+        builder: (context) => SymptomQuestionScreen(
+          question: SymptomQuestions.questionFor(1),
         ),
       ),
     );
