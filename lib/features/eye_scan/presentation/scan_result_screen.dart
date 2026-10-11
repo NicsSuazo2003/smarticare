@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/features/symptom_assessment/presentation/referral_criteria_widget.dart';
-import 'package:flutter_application_1/audit_log_service.dart';
+import 'package:flutter_application_1/services/audit_log_service.dart';
 import 'package:flutter_application_1/main.dart';
 import 'package:flutter_application_1/services/offline_sync_service.dart';
 import 'package:flutter_application_1/services/referral_service.dart';

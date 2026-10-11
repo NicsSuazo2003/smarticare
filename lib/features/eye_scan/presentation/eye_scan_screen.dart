@@ -6,8 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/features/eye_scan/data/latest_scan_cache.dart';
 import 'package:flutter_application_1/features/symptom_assessment/services/scoring_service.dart';
-import 'package:flutter_application_1/audit_log_service.dart';
-import 'package:flutter_application_1/eye_scan_service.dart';
+import 'package:flutter_application_1/services/audit_log_service.dart';
+import 'package:flutter_application_1/services/eye_scan_service.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:camera/camera.dart';
@@ -18,7 +18,7 @@ import '../../home/presentation/home_screen.dart';
 import '../../../features/profile/presentation/progress_screen.dart';
 import '../../../features/reminders/presentation/reminder_screen.dart';
 import '../../../features/profile/presentation/profile_screen.dart';
-import '../../../Screens/tflite_helper.dart'; // Your model helper
+import '../../../services/ml/tflite_helper.dart'; // Your model helper
 import 'package:provider/provider.dart';
 import '../../auth/providers/user_session_provider.dart';
 import 'package:image/image.dart' as img;

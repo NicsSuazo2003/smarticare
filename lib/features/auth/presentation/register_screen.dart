@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/features/eye_scan/presentation/eye_scan_screen.dart';
 import 'package:flutter_application_1/features/symptom_assessment/presentation/symptom_assessment_screen.dart';
-import 'package:flutter_application_1/audit_log_service.dart';
+import 'package:flutter_application_1/services/audit_log_service.dart';
 import 'package:intl/intl.dart'; // For date formatting
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';

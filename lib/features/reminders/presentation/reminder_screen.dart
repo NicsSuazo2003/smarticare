@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_application_1/audit_log_service.dart';
+import 'package:flutter_application_1/services/audit_log_service.dart';
 import 'package:flutter_application_1/main.dart';
 import 'package:flutter_application_1/data/models/reminder_model.dart';
 
